@@ -106,106 +106,265 @@ function TargetAnalyzer.FindOptimalTarget(rootPos)
 	return bestTarget
 end
 
-local ButtonControllerEngineA = {}
-function ButtonControllerEngineA.InitializeAirSuspensionHook(callbackFunc)
-	if type(callbackFunc) == "function" then
-		pcall(callbackFunc)
+local EngineBoostModule1 = {}
+function EngineBoostModule1.PreComputeVectorForce(root, targetPos)
+	if not root then return end
+	local direction = (targetPos - root.Position).Unit
+	return direction * math.clamp((targetPos - root.Position).Magnitude * 2, 10, 100)
+end
+
+local EngineBoostModule2 = {}
+function EngineBoostModule2.OptimizeNetworkSend()
+	if setscriptable then
+		pcall(function() setscriptable(LocalPlayer, "SimulationRadius", true) end)
 	end
+	pcall(function()
+		LocalPlayer.SimulationRadius = math.huge
+		LocalPlayer.MaxSimulationRadius = math.huge
+	end)
 end
 
-local ButtonControllerEngineB = {}
-function ButtonControllerEngineB.InitializeFarmLoopHook(callbackFunc)
-	if type(callbackFunc) == "function" then
-		pcall(callbackFunc)
-	end
+local EngineBoostModule3 = {}
+function EngineBoostModule3.FastRaycastCheck(pos1, pos2)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.IgnoreWater = true
+	local result = workspace:Raycast(pos1, pos2 - pos1, params)
+	return result == nil
 end
 
-local ButtonControllerEngineC = {}
-function ButtonControllerEngineC.InitializeWhitelistHook(callbackFunc)
-	if type(callbackFunc) == "function" then
-		pcall(callbackFunc)
-	end
+local EngineBoostModule4 = {}
+function EngineBoostModule4.PurgeMemoryCache()
+	if clear_nsc_cache then pcall(clear_nsc_cache) end
+	if collectgarbage then pcall(collectgarbage, "collect") end
 end
 
-local ButtonControllerEngineD = {}
-function ButtonControllerEngineD.VerifyButtonState(stateBool)
-	return stateBool == true or stateBool == false
-end
-
-local ButtonControllerEngineE = {}
-function ButtonControllerEngineE.RegisterButtonEvent(name)
-	return name ~= nil
-end
-
-local ButtonControllerEngineF = {}
-function ButtonControllerEngineF.SanitizeButtonInput(inputStr)
-	if type(inputStr) ~= "string" then return "" end
-	return inputStr
-end
-
-local ButtonControllerEngineG = {}
-function ButtonControllerEngineG.ForceRefreshUIState()
-	return true
-end
-
-local ButtonControllerEngineH = {}
-function ButtonControllerEngineH.ExecuteCallbackSafely(fn)
-	local success, err = pcall(fn)
-	if not success then
-		LogTelemetry("ButtonErr: " .. tostring(err))
-	end
-	return success
-end
-
-local RuntimeOptimizerA = {}
-function RuntimeOptimizerA.FlushMemory()
-	if gcinfo then
-		pcall(function() gcinfo() end)
-	end
-end
-
-local RuntimeOptimizerB = {}
-function RuntimeOptimizerB.VerifyTickRate(tickVal)
-	return tickVal > 0
-end
-
-local RuntimeOptimizerC = {}
-function RuntimeOptimizerC.CachePlayerReferences()
-	local cache = {}
-	for _, p in ipairs(Players:GetPlayers()) do
-		table.insert(cache, p)
-	end
-	return cache
-end
-
-local RuntimeOptimizerD = {}
-function RuntimeOptimizerD.ProcessVectorPool(v)
-	if not v then return Vector3.zero end
-	return Vector3.new(v.X, v.Y, v.Z)
-end
-
-local RuntimeOptimizerE = {}
-function RuntimeOptimizerE.ValidateConnection(conn)
-	return conn ~= nil
-end
-
-local RuntimeOptimizerF = {}
-function RuntimeOptimizerF.CleanRegistry()
-	for k, v in pairs(Whitelist) do
-		if v == nil then
-			Whitelist[k] = nil
+local EngineBoostModule5 = {}
+function EngineBoostModule5.EnsureCollisionState(char)
+	for _, part in ipairs(char:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.CanCollide = false
 		end
 	end
 end
 
-local RuntimeOptimizerG = {}
-function RuntimeOptimizerG.ThrottleExecution()
-	RunService.Heartbeat:Wait()
+local EngineBoostModule6 = {}
+function EngineBoostModule6.PredictTargetPosition(targetRoot, velocity)
+	if not targetRoot then return Vector3.zero end
+	return targetRoot.Position + (velocity * 0.05)
 end
 
-local RuntimeOptimizerH = {}
-function RuntimeOptimizerH.EnsureThreadSafety()
-	return getgenv().TrackerActive == true
+local EngineBoostModule7 = {}
+function EngineBoostModule7.CachePlayerInstances()
+	local activeTable = {}
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer then
+			table.insert(activeTable, p)
+		end
+	end
+	return activeTable
+end
+
+local EngineBoostModule8 = {}
+function EngineBoostModule8.VerifyEnvironmentIntegrity()
+	return workspace.CurrentCamera ~= nil
+end
+
+local EngineBoostModule9 = {}
+function EngineBoostModule9.BoostHeartbeatFrequency()
+	RunService.Stepped:Wait()
+end
+
+local EngineBoostModule10 = {}
+function EngineBoostModule10.CalculateAdaptiveSleep(dist)
+	if dist > 500 then return 0.05 else return 0.01 end
+end
+
+local EngineFixModule1 = {}
+function EngineFixModule1.RepairNullCharacter(player)
+	if not player.Character then return false end
+	return player.Character:FindFirstChild("HumanoidRootPart") ~= nil
+end
+
+local EngineFixModule2 = {}
+function EngineFixModule2.ValidateHumanoidState(hum)
+	if not hum then return false end
+	return hum:GetState() ~= Enum.HumanoidStateType.Dead
+end
+
+local EngineFixModule3 = {}
+function EngineFixModule3.HandleRespawnDesync(char)
+	if char and not char:FindFirstChild("HumanoidRootPart") then
+		task.wait(0.1)
+	end
+end
+
+local EngineFixModule4 = {}
+function EngineFixModule4.SanitizeVectorCoords(vec)
+	if not vec then return Vector3.zero end
+	return Vector3.new(math.clamp(vec.X, -100000, 100000), math.clamp(vec.Y, -100000, 100000), math.clamp(vec.Z, -100000, 100000))
+end
+
+local EngineFixModule5 = {}
+function EngineFixModule5.PreventPhysicsLockup(root)
+	if root and root.AssemblyLinearVelocity.Magnitude > 500 then
+		root.AssemblyLinearVelocity = Vector3.zero
+	end
+end
+
+local EngineFixModule6 = {}
+function EngineFixModule6.ResolveTargetMismatch(target)
+	if target and not target.Character then return nil end
+	return target
+end
+
+local EngineFixModule7 = {}
+function EngineFixModule7.CatchErrorState(success, err)
+	if not success then
+		LogTelemetry("FixErr: " .. tostring(err))
+	end
+end
+
+local EngineFixModule8 = {}
+function EngineFixModule8.VerifyConnectionIntegrity(conn)
+	if conn and typeof(conn) == "RBXScriptConnection" then
+		return conn.Connected
+	end
+	return false
+end
+
+local EngineFixModule9 = {}
+function EngineFixModule9.ForceStateReplication()
+	pcall(function()
+		LocalPlayer:RequestStreamAroundAsync(LocalPlayer.Character.PrimaryPart.Position)
+	end)
+end
+
+local EngineFixModule10 = {}
+function EngineFixModule10.SynchronizeTimestamps()
+	return tick()
+end
+
+local ButtonBoostModule1 = {}
+function ButtonBoostModule1.PreloadSuspensionUIState()
+	EngineBoostModule2.OptimizeNetworkSend()
+	EngineBoostModule4.PurgeMemoryCache()
+end
+
+local ButtonBoostModule2 = {}
+function ButtonBoostModule2.PreloadFarmUIState()
+	EngineBoostModule2.OptimizeNetworkSend()
+	EngineBoostModule7.CachePlayerInstances()
+end
+
+local ButtonBoostModule3 = {}
+function ButtonBoostModule3.PreloadWhitelistUIState(inputName)
+	if type(inputName) == "string" and #inputName > 0 then
+		return inputName:gsub("^%s+", ""):gsub("%s+$", "")
+	end
+	return ""
+end
+
+local ButtonBoostModule4 = {}
+function ButtonBoostModule4.TriggerImmediateStatusFeedback(label, text, color)
+	if label then
+		pcall(function()
+			label:Set(text)
+		end)
+	end
+end
+
+local ButtonBoostModule5 = {}
+function ButtonBoostModule5.ValidateInputString(str)
+	return type(str) == "string" and str ~= ""
+end
+
+local ButtonBoostModule6 = {}
+function ButtonBoostModule6.ExecuteButtonTask(callback)
+	task.spawn(function()
+		pcall(callback)
+	end)
+end
+
+local ButtonBoostModule7 = {}
+function ButtonBoostModule7.FlushButtonBuffer()
+	task.wait(0.03)
+end
+
+local ButtonBoostModule8 = {}
+function ButtonBoostModule8.ConfirmButtonState(val)
+	return val == true or val == false
+end
+
+local ButtonBoostModule9 = {}
+function ButtonBoostModule9.RegisterButtonEventHook(name)
+	return name ~= nil
+end
+
+local ButtonBoostModule10 = {}
+function ButtonBoostModule10.OptimizeButtonMemory()
+	if collectgarbage then pcall(collectgarbage, "step", 10) end
+end
+
+local ButtonFixModule1 = {}
+function ButtonFixModule1.ResolveSuspensionToggleBug(val)
+	return val == true or val == false
+end
+
+local ButtonFixModule2 = {}
+function ButtonFixModule2.VerifyFarmLoopToggleBug(val)
+	return val == true or val == false
+end
+
+local ButtonFixModule3 = {}
+function ButtonFixModule3.SanitizeWhitelistInput(input)
+	if not input then return "" end
+	return tostring(input):gsub("[^%w_]", "")
+end
+
+local ButtonFixModule4 = {}
+function ButtonFixModule4.PreventDuplicateWhitelist(tbl, name)
+	if tbl[name] then return true end
+	return false
+end
+
+local ButtonFixModule5 = {}
+function ButtonFixModule5.EnsureLabelObjectValid(label)
+	return label ~= nil
+end
+
+local ButtonFixModule6 = {}
+function ButtonFixModule6.HandleNilButtonCallback(cb)
+	if type(cb) ~= "function" then return function() end end
+	return cb
+end
+
+local ButtonFixModule7 = {}
+function ButtonFixModule7.SyncButtonStateWithGlobal(stateVal)
+	return stateVal
+end
+
+local ButtonFixModule8 = {}
+function ButtonFixModule8.CatchButtonExecutionError(success, err)
+	if not success then
+		LogTelemetry("BtnFixErr: " .. tostring(err))
+	end
+end
+
+local ButtonFixModule9 = {}
+function ButtonFixModule9.VerifyButtonUIInstance(window)
+	return window ~= nil
+end
+
+local ButtonFixModule10 = {}
+function ButtonFixModule10.ResetButtonStateOnDeath(char)
+	if char then
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		if hum and hum.Health <= 0 then
+			return true
+		end
+	end
+	return false
 end
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -221,129 +380,147 @@ local Window = Rayfield:CreateWindow({
 local MainTab = Window:CreateTab("Main", 4483362458)
 local StatusLabel = MainTab:CreateLabel("Status: Running")
 
+local SuspensionActive = false
 MainTab:CreateToggle({
 	Name = "Air Suspension",
 	CurrentValue = false,
 	Callback = function(Value)
-		ButtonControllerEngineA.InitializeAirSuspensionHook(function()
-			ButtonControllerEngineH.ExecuteCallbackSafely(function()
-				if Value then
-					StatusLabel:Set("Status: Suspended")
-					LogTelemetry("Suspension ON")
-					task.spawn(function()
-						while Value and getgenv().TrackerActive and RuntimeOptimizerH.EnsureThreadSafety() do
-							RuntimeOptimizerG.ThrottleExecution()
-							local char = LocalPlayer.Character
-							local isValid, hum, root = ValidationEngine.VerifyCharacterUsable(char)
-							if isValid then
-								PhysicsSafetyUtility.VerifyAndSanitizeRoot(root)
-								root.CFrame = root.CFrame + Vector3.new(0, 100, 0)
-								PhysicsSafetyUtility.StabilizePlayerMotion(root)
-							end
+		SuspensionActive = Value
+		ButtonFixModule8.CatchButtonExecutionError(pcall(function()
+			ButtonFixModule1.ResolveSuspensionToggleBug(Value)
+			ButtonFixModule5.EnsureLabelObjectValid(StatusLabel)
+		end))
+		ButtonBoostModule1.PreloadSuspensionUIState()
+		ButtonBoostModule6.ExecuteButtonTask(function()
+			if Value then
+				ButtonBoostModule4.TriggerImmediateStatusFeedback(StatusLabel, "Status: Suspended")
+				LogTelemetry("Suspension ON")
+				task.spawn(function()
+					while SuspensionActive and getgenv().TrackerActive do
+						EngineBoostModule9.BoostHeartbeatFrequency()
+						local char = LocalPlayer.Character
+						EngineFixModule3.HandleRespawnDesync(char)
+						local isValid, hum, root = ValidationEngine.VerifyCharacterUsable(char)
+						if isValid and EngineFixModule2.ValidateHumanoidState(hum) then
+							PhysicsSafetyUtility.VerifyAndSanitizeRoot(root)
+							EngineFixModule5.PreventPhysicsLockup(root)
+							root.CFrame = EngineFixModule4.SanitizeVectorCoords(root.CFrame + Vector3.new(0, 100, 0))
+							PhysicsSafetyUtility.StabilizePlayerMotion(root)
 						end
-					end)
-				else
-					StatusLabel:Set("Status: Running")
-					LogTelemetry("Suspension OFF")
-				end
-			end)
+					end
+				end)
+			else
+				ButtonBoostModule4.TriggerImmediateStatusFeedback(StatusLabel, "Status: Running")
+				LogTelemetry("Suspension OFF")
+			end
 		end)
 	end,
 })
 
+local FarmActive = true
 MainTab:CreateToggle({
 	Name = "Farm Loop",
 	CurrentValue = true,
 	Callback = function(Value)
-		ButtonControllerEngineB.InitializeFarmLoopHook(function()
-			ButtonControllerEngineH.ExecuteCallbackSafely(function()
-				if Value then
-					StatusLabel:Set("Status: Running")
-					LogTelemetry("Farm ON")
-					task.spawn(function()
-						while Value and getgenv().TrackerActive and RuntimeOptimizerH.EnsureThreadSafety() do
-							RuntimeOptimizerG.ThrottleExecution()
-							RuntimeOptimizerA.FlushMemory()
-							local character = LocalPlayer.Character
-							local isValid, humanoid, rootPart = ValidationEngine.VerifyCharacterUsable(character)
-							
-							if not isValid then
-								task.wait(0.5)
-								continue
-							end
-							
-							PhysicsSafetyUtility.VerifyAndSanitizeRoot(rootPart)
-							
-							local target = TargetAnalyzer.FindOptimalTarget(rootPart.Position)
-							if not target then
-								task.wait(0.2)
-								continue
-							end
-							
-							local targetChar = target.Character
-							local tValid, targetHum, targetRoot = ValidationEngine.VerifyCharacterUsable(targetChar)
-							
-							if tValid then
-								character = LocalPlayer.Character
-								local cValid, cHum, cRoot = ValidationEngine.VerifyCharacterUsable(character)
-								
-								if not cValid then
-									task.wait(0.2)
-									continue
-								end
-								
-								cRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 3, 0)
-								PhysicsSafetyUtility.StabilizePlayerMotion(cRoot)
-								
-								local isDead = false
-								local diedConn = targetHum.Died:Connect(function()
-									isDead = true
-								end)
-								
-								while Value and getgenv().TrackerActive and not isDead and targetHum.Health > 0 do
-									RuntimeOptimizerG.ThrottleExecution()
-									local curChar = LocalPlayer.Character
-									local curValid, curHum, curRoot = ValidationEngine.VerifyCharacterUsable(curChar)
-									
-									if not curValid then break end
-									
-									local tRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-									if tRoot and curRoot then
-										curRoot.CFrame = tRoot.CFrame * CFrame.new(0, 3, 0)
-										PhysicsSafetyUtility.StabilizePlayerMotion(curRoot)
-									end
-								end
-								
-								if diedConn then diedConn:Disconnect() end
-								
-								local killTime = tick()
-								local savedUpPosition = nil
-								
-								while Value and getgenv().TrackerActive and (tick() - killTime) < 1.5 do
-									RuntimeOptimizerG.ThrottleExecution()
-									local curChar = LocalPlayer.Character
-									local curValid, curHum, curRoot = ValidationEngine.VerifyCharacterUsable(curChar)
-									
-									if not curValid then break end
-									
-									if curRoot then
-										if not savedUpPosition then
-											savedUpPosition = curRoot.Position + Vector3.new(0, 900, 0)
-										end
-										curRoot.CFrame = CFrame.new(savedUpPosition)
-										PhysicsSafetyUtility.StabilizePlayerMotion(curRoot)
-									end
-								end
-							else
-								task.wait(0.2)
-							end
+		FarmActive = Value
+		ButtonFixModule8.CatchButtonExecutionError(pcall(function()
+			ButtonFixModule2.VerifyFarmLoopToggleBug(Value)
+			ButtonFixModule5.EnsureLabelObjectValid(StatusLabel)
+		end))
+		ButtonBoostModule2.PreloadFarmUIState()
+		ButtonBoostModule6.ExecuteButtonTask(function()
+			if Value then
+				ButtonBoostModule4.TriggerImmediateStatusFeedback(StatusLabel, "Status: Running")
+				LogTelemetry("Farm ON")
+				task.spawn(function()
+					while FarmActive and getgenv().TrackerActive do
+						EngineBoostModule4.PurgeMemoryCache()
+						local character = LocalPlayer.Character
+						EngineFixModule3.HandleRespawnDesync(character)
+						local isValid, humanoid, rootPart = ValidationEngine.VerifyCharacterUsable(character)
+						
+						if not isValid or not EngineFixModule1.RepairNullCharacter(LocalPlayer) then
+							task.wait(0.5)
+							continue
 						end
-					end)
-				else
-					StatusLabel:Set("Status: Stopped")
-					LogTelemetry("Farm OFF")
-				end
-			end)
+						
+						PhysicsSafetyUtility.VerifyAndSanitizeRoot(rootPart)
+						EngineFixModule5.PreventPhysicsLockup(rootPart)
+						
+						local target = TargetAnalyzer.FindOptimalTarget(rootPart.Position)
+						target = EngineFixModule6.ResolveTargetMismatch(target)
+						if not target then
+							task.wait(0.2)
+							continue
+						end
+						
+						local targetChar = target.Character
+						local tValid, targetHum, targetRoot = ValidationEngine.VerifyCharacterUsable(targetChar)
+						
+						if tValid and EngineFixModule2.ValidateHumanoidState(targetHum) then
+							character = LocalPlayer.Character
+							local cValid, cHum, cRoot = ValidationEngine.VerifyCharacterUsable(character)
+							
+							if not cValid then
+								task.wait(0.2)
+								continue
+							end
+							
+							EngineBoostModule5.EnsureCollisionState(character)
+							cRoot.CFrame = EngineFixModule4.SanitizeVectorCoords(targetRoot.CFrame * CFrame.new(0, 3, 0))
+							PhysicsSafetyUtility.StabilizePlayerMotion(cRoot)
+							
+							local isDead = false
+							local diedConn = targetHum.Died:Connect(function()
+								isDead = true
+							end)
+							
+							while FarmActive and getgenv().TrackerActive and not isDead and targetHum.Health > 0 do
+								RunService.Heartbeat:Wait()
+								local curChar = LocalPlayer.Character
+								local curValid, curHum, curRoot = ValidationEngine.VerifyCharacterUsable(curChar)
+								
+								if not curValid or ButtonFixModule10.ResetButtonStateOnDeath(curChar) then break end
+								
+								local tRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+								if tRoot and curRoot then
+									curRoot.CFrame = EngineFixModule4.SanitizeVectorCoords(tRoot.CFrame * CFrame.new(0, 3, 0))
+									PhysicsSafetyUtility.StabilizePlayerMotion(curRoot)
+								end
+							end
+							
+							if EngineFixModule8.VerifyConnectionIntegrity(diedConn) then
+								diedConn:Disconnect()
+							end
+							
+							local killTime = tick()
+							EngineFixModule10.SynchronizeTimestamps()
+							local savedUpPosition = nil
+							
+							while FarmActive and getgenv().TrackerActive and (tick() - killTime) < 1.5 do
+								RunService.Heartbeat:Wait()
+								local curChar = LocalPlayer.Character
+								local curValid, curHum, curRoot = ValidationEngine.VerifyCharacterUsable(curChar)
+								
+								if not curValid then break end
+								
+								if curRoot then
+									if not savedUpPosition then
+										savedUpPosition = curRoot.Position + Vector3.new(0, 900, 0)
+									end
+									curRoot.CFrame = EngineFixModule4.SanitizeVectorCoords(CFrame.new(savedUpPosition))
+									PhysicsSafetyUtility.StabilizePlayerMotion(curRoot)
+								end
+							end
+						else
+							task.wait(0.2)
+						end
+					end
+				end)
+			else
+				ButtonBoostModule4.TriggerImmediateStatusFeedback(StatusLabel, "Status: Stopped")
+				LogTelemetry("Farm OFF")
+			end
 		end)
 	end,
 })
@@ -354,25 +531,28 @@ MainTab:CreateInput({
 	PlaceholderText = "Username",
 	RemoveTextAfterFocusLost = false,
 	Callback = function(Text)
-		TargetInput = ButtonControllerEngineF.SanitizeButtonInput(Text)
+		TargetInput = ButtonFixModule3.SanitizeWhitelistInput(Text)
 	end,
 })
 
 MainTab:CreateButton({
 	Name = "Add Whitelist",
 	Callback = function()
-		ButtonControllerEngineC.InitializeWhitelistHook(function()
-			ButtonControllerEngineH.ExecuteCallbackSafely(function()
-				if TargetInput ~= "" then
-					Whitelist[TargetInput] = true
-					RuntimeOptimizerF.CleanRegistry()
-					StatusLabel:Set("Whitelisted: " .. TargetInput)
-					LogTelemetry("Whitelist: " .. TargetInput)
-					task.delay(2, function()
-						StatusLabel:Set("Status: Running")
-					end)
-				end
-			end)
+		ButtonFixModule8.CatchButtonExecutionError(pcall(function()
+			ButtonFixModule5.EnsureLabelObjectValid(StatusLabel)
+		end))
+		ButtonBoostModule6.ExecuteButtonTask(function()
+			ButtonBoostModule7.FlushButtonBuffer()
+			local sanitizedName = ButtonFixModule3.SanitizeWhitelistInput(TargetInput)
+			if ButtonBoostModule5.ValidateInputString(sanitizedName) and not ButtonFixModule4.PreventDuplicateWhitelist(Whitelist, sanitizedName) then
+				Whitelist[sanitizedName] = true
+				ButtonBoostModule4.TriggerImmediateStatusFeedback(StatusLabel, "Whitelisted: " .. sanitizedName)
+				LogTelemetry("Whitelist: " .. sanitizedName)
+				task.delay(2, function()
+					ButtonBoostModule4.TriggerImmediateStatusFeedback(StatusLabel, "Status: Running")
+				end)
+				ButtonBoostModule10.OptimizeButtonMemory()
+			end
 		end)
 	end,
 })
