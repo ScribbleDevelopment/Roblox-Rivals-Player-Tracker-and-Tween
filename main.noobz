@@ -53,14 +53,20 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 10)
 UICorner.Parent = MainFrame
 
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 45)
+TitleBar.BackgroundTransparency = 1
+TitleBar.Active = true
+TitleBar.Parent = MainFrame
+
 local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(1, 0, 0, 45)
+TitleLabel.Size = UDim2.new(1, 0, 1, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Text = "Tracker Controller"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.TextSize = 18
 TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.Parent = MainFrame
+TitleLabel.Parent = TitleBar
 
 local HideButton = Instance.new("TextButton")
 HideButton.Size = UDim2.new(0, 45, 0, 45)
@@ -70,6 +76,7 @@ HideButton.Text = "-"
 HideButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 HideButton.TextSize = 22
 HideButton.Font = Enum.Font.GothamBold
+HideButton.ZIndex = 5
 HideButton.Parent = MainFrame
 
 local ToggleButton = Instance.new("TextButton")
@@ -80,6 +87,7 @@ ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 ToggleButton.Text = "Air Suspension: OFF"
 ToggleButton.TextSize = 16
 ToggleButton.Font = Enum.Font.GothamMedium
+ToggleButton.ZIndex = 3
 ToggleButton.Parent = MainFrame
 
 local ToggleCorner = Instance.new("UICorner")
@@ -94,6 +102,7 @@ FarmButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 FarmButton.Text = "Farm / Teleport: ON"
 FarmButton.TextSize = 16
 FarmButton.Font = Enum.Font.GothamMedium
+FarmButton.ZIndex = 3
 FarmButton.Parent = MainFrame
 
 local FarmCorner = Instance.new("UICorner")
@@ -109,6 +118,7 @@ UsernameBox.PlaceholderText = "Enter Username"
 UsernameBox.Text = ""
 UsernameBox.TextSize = 16
 UsernameBox.Font = Enum.Font.Gotham
+UsernameBox.ZIndex = 3
 UsernameBox.Parent = MainFrame
 
 local BoxCorner = Instance.new("UICorner")
@@ -123,6 +133,7 @@ WhitelistButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 WhitelistButton.Text = "Whitelist Player"
 WhitelistButton.TextSize = 16
 WhitelistButton.Font = Enum.Font.GothamMedium
+WhitelistButton.ZIndex = 3
 WhitelistButton.Parent = MainFrame
 
 local WhitelistCorner = Instance.new("UICorner")
@@ -137,10 +148,11 @@ StatusLabel.Text = "Status: Running"
 StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
 StatusLabel.TextSize = 14
 StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.ZIndex = 3
 StatusLabel.Parent = MainFrame
 
 local dragging, dragInput, dragStart, startPos
-TitleLabel.InputBegan:Connect(function(input)
+TitleBar.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		dragging = true
 		dragStart = input.Position
@@ -153,7 +165,7 @@ TitleLabel.InputBegan:Connect(function(input)
 	end
 end)
 
-TitleLabel.InputChanged:Connect(function(input)
+TitleBar.InputChanged:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 		dragInput = input
 	end
@@ -170,7 +182,7 @@ local guiVisible = true
 HideButton.MouseButton1Click:Connect(function()
 	guiVisible = not guiVisible
 	for _, child in ipairs(MainFrame:GetChildren()) do
-		if child ~= TitleLabel and child ~= HideButton and child ~= UICorner then
+		if child ~= TitleBar and child ~= HideButton and child ~= UICorner then
 			child.Visible = guiVisible
 		end
 	end
@@ -228,36 +240,6 @@ function MathModule.GetDistanceSquared(pos1, pos2)
 	return (dx * dx) + (dy * dy) + (dz * dz)
 end
 
-function MathModule.FastMagnitude(pos1, pos2)
-	return math_sqrt(MathModule.GetDistanceSquared(pos1, pos2))
-end
-
-function MathModule.DummyFunctionA()
-	local x = 1
-	for i = 1, 10 do
-		x = x + i
-	end
-	return x
-end
-
-function MathModule.DummyFunctionB()
-	local y = 2
-	for i = 1, 5 do
-		y = y * i
-	end
-	return y
-end
-
-function MathModule.DummyFunctionC()
-	local z = Vector3_new(0, 0, 0)
-	return z
-end
-
-function MathModule.DummyFunctionD()
-	local t = tick()
-	return t
-end
-
 local ValidationModule = {}
 
 function ValidationModule.GetHumanoid(character)
@@ -297,29 +279,6 @@ function ValidationModule.GetLocalCharacterState()
 	return char, hum, root
 end
 
-function ValidationModule.EnsureSafeLocalState()
-	local char, hum, root = ValidationModule.GetLocalCharacterState()
-	if not char or not hum or not root then return false end
-	if hum.Health <= 0 then return false end
-	return true, char, hum, root
-end
-
-function ValidationModule.DummyValidationA()
-	return true
-end
-
-function ValidationModule.DummyValidationB()
-	return false
-end
-
-function ValidationModule.DummyValidationC()
-	return nil
-end
-
-function ValidationModule.DummyValidationD()
-	return LocalPlayer ~= nil
-end
-
 local TargetModule = {}
 
 function TargetModule.FindOptimalTarget(myRootPos)
@@ -343,22 +302,6 @@ function TargetModule.FindOptimalTarget(myRootPos)
 	return bestTarget
 end
 
-function TargetModule.DummyTargetA()
-	return nil
-end
-
-function TargetModule.DummyTargetB()
-	return 0
-end
-
-function TargetModule.DummyTargetC()
-	return {}
-end
-
-function TargetModule.DummyTargetD()
-	return true
-end
-
 local PhysicsModule = {}
 
 function PhysicsModule.VerifyVoidBoundary(rootPart)
@@ -375,44 +318,12 @@ function PhysicsModule.StabilizeVelocity(rootPart)
 	rootPart.AssemblyAngularVelocity = Vector3_new(0, 0, 0)
 end
 
-function PhysicsModule.DummyPhysicsA()
-	return true
-end
-
-function PhysicsModule.DummyPhysicsB()
-	return false
-end
-
-function PhysicsModule.DummyPhysicsC()
-	return nil
-end
-
-function PhysicsModule.DummyPhysicsD()
-	return 0
-end
-
 local MovementModule = {}
 
 function MovementModule.ExecuteInstantTeleport(rootPart, targetRoot)
 	if not rootPart or not targetRoot then return end
 	rootPart.CFrame = targetRoot.CFrame * CFrame_new(0, 3, 0)
 	PhysicsModule.StabilizeVelocity(rootPart)
-end
-
-function MovementModule.DummyMovementA()
-	return true
-end
-
-function MovementModule.DummyMovementB()
-	return false
-end
-
-function MovementModule.DummyMovementC()
-	return nil
-end
-
-function MovementModule.DummyMovementD()
-	return 0
 end
 
 local SuspensionModule = {}
@@ -437,22 +348,6 @@ function SuspensionModule.ExecuteSuspensionSequence()
 		
 		RunService.Heartbeat:Wait()
 	end
-end
-
-function SuspensionModule.DummySuspensionA()
-	return true
-end
-
-function SuspensionModule.DummySuspensionB()
-	return false
-end
-
-function SuspensionModule.DummySuspensionC()
-	return nil
-end
-
-function SuspensionModule.DummySuspensionD()
-	return 0
 end
 
 local LoopController = {}
@@ -497,8 +392,8 @@ function LoopController.InitializeMainLoop()
 			
 			local tValid, tChar, tHum, tRoot = ValidationModule.IsPlayerValid(targetPlayer)
 			if tValid then
-				local currentValid, curChar, curHum, curRoot = ValidationModule.EnsureSafeLocalState()
-				if not currentValid then
+				local currentValid, curChar, curHum, curRoot = ValidationModule.GetLocalCharacterState()
+				if not currentValid or curHum.Health <= 0 then
 					task.wait(Config.TickInterval)
 					continue
 				end
@@ -536,22 +431,6 @@ function LoopController.InitializeMainLoop()
 			end
 		end
 	end)
-end
-
-function LoopController.DummyLoopA()
-	return true
-end
-
-function LoopController.DummyLoopB()
-	return false
-end
-
-function LoopController.DummyLoopC()
-	return nil
-end
-
-function LoopController.DummyLoopD()
-	return 0
 end
 
 LoopController.InitializeMainLoop()
