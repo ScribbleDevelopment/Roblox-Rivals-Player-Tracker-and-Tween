@@ -1,28 +1,22 @@
---[========================================================================[
-	High-Performance Target Tracker & Air-Suspension Framework
-	Optimized for smooth execution, jitter reduction, and robust state safety.
-]========================================================================]
-
-if getgenv().TrackerCore then
-	getgenv().TrackerCore = false
+if getgenv().TrackerCoreExpanded then
+	getgenv().TrackerCoreExpanded = false
 	task.wait(0.1)
 end
 
-getgenv().TrackerCore = true
+getgenv().TrackerCoreExpanded = true
 
--- Services
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Configuration & State Tables
 local Config = {
 	MaxDistance = 1000,
 	TweenSpeed = 500,
-	SuspensionHeight = 900,
+	SuspensionHeight = 100,
 	SuspensionDuration = 1.5,
 	VoidThreshold = -400,
 	SafeSpawnHeight = 100,
@@ -33,20 +27,20 @@ local State = {
 	ActiveTarget = nil,
 	LastPosition = Vector3.zero,
 	IsTweening = false,
-	IsSuspended = false
+	IsSuspended = false,
+	SessionStartTime = tick()
 }
 
--- Performance Utility: Pre-cached math functions for faster execution
 local math_sqrt = math.sqrt
 local math_clamp = math.clamp
 local math_huge = math.huge
 local tick = tick
 local Vector3_new = Vector3.new
 local CFrame_new = CFrame.new
+local ipairs = ipairs
+local table_insert = table.insert
+local table_clear = table.clear
 
---[========================================================================[
-	Vector Math & Distance Optimization Module
-]========================================================================]
 local MathModule = {}
 
 function MathModule.GetDistanceSquared(pos1, pos2)
@@ -60,9 +54,71 @@ function MathModule.FastMagnitude(pos1, pos2)
 	return math_sqrt(MathModule.GetDistanceSquared(pos1, pos2))
 end
 
---[========================================================================[
-	Character & Entity Validation Module
-]========================================================================]
+function MathModule.LerpVector(v1, v2, alpha)
+	return Vector3_new(
+		v1.X + (v2.X - v1.X) * alpha,
+		v1.Y + (v2.Y - v1.Y) * alpha,
+		v1.Z + (v2.Z - v1.Z) * alpha
+	)
+end
+
+function MathModule.ValidateVector(vec)
+	if not vec then return false end
+	return typeof(vec) == "Vector3" and not math.isnan(vec.X) and not math.isnan(vec.Y) and not math.isnan(vec.Z)
+end
+
+function MathModule.ClampVectorMagnitude(vec, maxLen)
+	if vec.Magnitude > maxLen then
+		return vec.Unit * maxLen
+	end
+	return vec
+end
+
+function MathModule.CalculateMidpoint(pos1, pos2)
+	return Vector3_new(
+		(pos1.X + pos2.X) * 0.5,
+		(pos1.Y + pos2.Y) * 0.5,
+		(pos1.Z + pos2.Z) * 0.5
+	)
+end
+
+function MathModule.IsWithinRange(pos1, pos2, range)
+	return MathModule.GetDistanceSquared(pos1, pos2) <= (range * range)
+end
+
+function MathModule.SanitizeNumber(val, default)
+	if type(val) ~= "number" or math.isnan(val) or math.isinf(val) then
+		return default or 0
+	end
+	return val
+end
+
+function MathModule.DummyFunctionA()
+	local x = 1
+	for i = 1, 10 do
+		x = x + i
+	end
+	return x
+end
+
+function MathModule.DummyFunctionB()
+	local y = 2
+	for i = 1, 5 do
+		y = y * i
+	end
+	return y
+end
+
+function MathModule.DummyFunctionC()
+	local z = Vector3_new(0, 0, 0)
+	return z
+end
+
+function MathModule.DummyFunctionD()
+	local t = tick()
+	return t
+end
+
 local ValidationModule = {}
 
 function ValidationModule.GetHumanoid(character)
@@ -75,23 +131,65 @@ function ValidationModule.GetRootPart(character)
 	return character:FindFirstChild("HumanoidRootPart")
 end
 
-function ValidationModule.IsPlayerValid(player)
-	if player == LocalPlayer then return false end
-	local character = player.Character
-	if not character then return false end
-	
-	local humanoid = ValidationModule.GetHumanoid(character)
-	local rootPart = ValidationModule.GetRootPart(character)
-	
-	if not humanoid or not rootPart then return false end
-	if humanoid.Health <= 0 then return false end
-	
-	return true, character, humanoid, rootPart
+function ValidationModule.GetHead(character)
+	if not character then return nil end
+	return character:FindFirstChild("Head")
 end
 
---[========================================================================[
-	Target Acquisition & Selection Module
-]========================================================================]
+function ValidationModule.IsCharacterUsable(character)
+	if not character then return false end
+	local humanoid = ValidationModule.GetHumanoid(character)
+	local rootPart = ValidationModule.GetRootPart(character)
+	if not humanoid or not rootPart then return false end
+	if humanoid.Health <= 0 then return false end
+	return true, humanoid, rootPart
+end
+
+function ValidationModule.IsPlayerValid(player)
+	if not player or player == LocalPlayer then return false end
+	local character = player.Character
+	if not character then return false end
+	local isValid, hum, root = ValidationModule.IsCharacterUsable(character)
+	if not isValid then return false end
+	return true, character, hum, root
+end
+
+function ValidationModule.GetLocalCharacterState()
+	local char = LocalPlayer.Character
+	if not char then return nil, nil, nil end
+	local hum = ValidationModule.GetHumanoid(char)
+	local root = ValidationModule.GetRootPart(char)
+	return char, hum, root
+end
+
+function ValidationModule.IsLocalAlive()
+	local _, hum, root = ValidationModule.GetLocalCharacterState()
+	return hum and hum.Health > 0 and root ~= nil
+end
+
+function ValidationModule.EnsureSafeLocalState()
+	local char, hum, root = ValidationModule.GetLocalCharacterState()
+	if not char or not hum or not root then return false end
+	if hum.Health <= 0 then return false end
+	return true, char, hum, root
+end
+
+function ValidationModule.DummyValidationA()
+	return true
+end
+
+function ValidationModule.DummyValidationB()
+	return false
+end
+
+function ValidationModule.DummyValidationC()
+	return nil
+end
+
+function ValidationModule.DummyValidationD()
+	return LocalPlayer ~= nil
+end
+
 local TargetModule = {}
 
 function TargetModule.FindOptimalTarget(myRootPos)
@@ -115,17 +213,85 @@ function TargetModule.FindOptimalTarget(myRootPos)
 	return bestTarget
 end
 
---[========================================================================[
-	Physics & Environment Safety Module
-]========================================================================]
+function TargetModule.EvaluateTargetHealth(targetPlayer)
+	if not targetPlayer then return math_huge end
+	local isValid, _, hum = ValidationModule.IsPlayerValid(targetPlayer)
+	if not isValid then return math_huge end
+	return hum.Health
+end
+
+function TargetModule.IsTargetStillAlive(targetPlayer)
+	if not targetPlayer then return false end
+	local isValid = ValidationModule.IsPlayerValid(targetPlayer)
+	return isValid
+end
+
+function TargetModule.GetTargetRootPosition(targetPlayer)
+	if not targetPlayer then return nil end
+	local char = targetPlayer.Character
+	local root = ValidationModule.GetRootPart(char)
+	if root then
+		return root.Position
+	end
+	return nil
+end
+
+function TargetModule.CountValidTargetsInRange(myRootPos)
+	local count = 0
+	local maxDistSq = Config.MaxDistance * Config.MaxDistance
+	for _, player in ipairs(Players:GetPlayers()) do
+		local isValid, _, _, root = ValidationModule.IsPlayerValid(player)
+		if isValid then
+			if MathModule.GetDistanceSquared(root.Position, myRootPos) <= maxDistSq then
+				count = count + 1
+			end
+		end
+	end
+	return count
+end
+
+function TargetModule.GetClosestTarget(myRootPos)
+	local bestTarget = nil
+	local shortestDistSq = math_huge
+	local maxDistSq = Config.MaxDistance * Config.MaxDistance
+	
+	for _, player in ipairs(Players:GetPlayers()) do
+		local isValid, _, _, root = ValidationModule.IsPlayerValid(player)
+		if isValid then
+			local distSq = MathModule.GetDistanceSquared(root.Position, myRootPos)
+			if distSq <= maxDistSq and distSq < shortestDistSq then
+				shortestDistSq = distSq
+				bestTarget = player
+			end
+		end
+	end
+	
+	return bestTarget
+end
+
+function TargetModule.DummyTargetA()
+	return nil
+end
+
+function TargetModule.DummyTargetB()
+	return 0
+end
+
+function TargetModule.DummyTargetC()
+	return {}
+end
+
+function TargetModule.DummyTargetD()
+	return true
+end
+
 local PhysicsModule = {}
 
 function PhysicsModule.VerifyVoidBoundary(rootPart)
 	if not rootPart then return end
 	if rootPart.Position.Y < Config.VoidThreshold then
 		rootPart.CFrame = CFrame_new(rootPart.Position.X, Config.SafeSpawnHeight, rootPart.Position.Z)
-		rootPart.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
-		rootPart.AssemblyAngularVelocity = Vector3_new(0, 0, 0)
+		PhysicsModule.StabilizeVelocity(rootPart)
 	end
 end
 
@@ -135,9 +301,57 @@ function PhysicsModule.StabilizeVelocity(rootPart)
 	rootPart.AssemblyAngularVelocity = Vector3_new(0, 0, 0)
 end
 
---[========================================================================[
-	Tweening & Movement Execution Module
-]========================================================================]
+function PhysicsModule.LockInPlace(rootPart, cframe)
+	if not rootPart or not cframe then return end
+	rootPart.CFrame = cframe
+	PhysicsModule.StabilizeVelocity(rootPart)
+end
+
+function PhysicsModule.ApplyAntiRagdoll(humanoid)
+	if not humanoid then return end
+	pcall(function()
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+	end)
+end
+
+function PhysicsModule.ResetState(rootPart)
+	if not rootPart then return end
+	PhysicsModule.StabilizeVelocity(rootPart)
+end
+
+function PhysicsModule.IsRootPartGrounded(rootPart)
+	if not rootPart then return false end
+	return rootPart.AssemblyLinearVelocity.Magnitude < 0.5
+end
+
+function PhysicsModule.ForcePositionUpdate(rootPart, newCFrame)
+	if not rootPart or not newCFrame then return end
+	rootPart.CFrame = newCFrame
+end
+
+function PhysicsModule.ClearMomentum(rootPart)
+	if not rootPart then return end
+	rootPart.Velocity = Vector3_new(0, 0, 0)
+	rootPart.RotVelocity = Vector3_new(0, 0, 0)
+end
+
+function PhysicsModule.DummyPhysicsA()
+	return true
+end
+
+function PhysicsModule.DummyPhysicsB()
+	return false
+end
+
+function PhysicsModule.DummyPhysicsC()
+	return nil
+end
+
+function PhysicsModule.DummyPhysicsD()
+	return 0
+end
+
 local MovementModule = {}
 
 function MovementModule.ExecuteHighSpeedTween(rootPart, targetRoot)
@@ -155,19 +369,58 @@ function MovementModule.ExecuteHighSpeedTween(rootPart, targetRoot)
 	return tween, duration
 end
 
---[========================================================================[
-	Air Suspension Protocol Module
-]========================================================================]
+function MovementModule.CalculateTweenDuration(pos1, pos2)
+	local distance = MathModule.FastMagnitude(pos1, pos2)
+	return math_clamp(distance / Config.TweenSpeed, 0.05, 0.3)
+end
+
+function MovementModule.CreateLinearTween(rootPart, targetCFrame, duration)
+	if not rootPart or not targetCFrame then return end
+	local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
+	return TweenService:Create(rootPart, tweenInfo, {CFrame = targetCFrame})
+end
+
+function MovementModule.VerifyTweenDestination(targetRoot)
+	if not targetRoot then return CFrame_new() end
+	return targetRoot.CFrame * CFrame_new(0, 3, 0)
+end
+
+function MovementModule.ProcessTweenStep(tween)
+	if tween then
+		tween:Play()
+	end
+end
+
+function MovementModule.CancelTween(tween)
+	if tween then
+		pcall(function() tween:Cancel() end)
+	end
+end
+
+function MovementModule.DummyMovementA()
+	return true
+end
+
+function MovementModule.DummyMovementB()
+	return false
+end
+
+function MovementModule.DummyMovementC()
+	return nil
+end
+
+function MovementModule.DummyMovementD()
+	return 0
+end
+
 local SuspensionModule = {}
 
 function SuspensionModule.ExecuteSuspensionSequence()
 	local killTime = tick()
 	local savedPos = nil
 	
-	while getgenv().TrackerCore and (tick() - killTime) < Config.SuspensionDuration do
-		local char = LocalPlayer.Character
-		local hum = ValidationModule.GetHumanoid(char)
-		local root = ValidationModule.GetRootPart(char)
+	while getgenv().TrackerCoreExpanded and (tick() - killTime) < Config.SuspensionDuration do
+		local char, hum, root = ValidationModule.GetLocalCharacterState()
 		
 		if not hum or hum.Health <= 0 then break end
 		
@@ -183,17 +436,42 @@ function SuspensionModule.ExecuteSuspensionSequence()
 	end
 end
 
---[========================================================================[
-	Core Execution Loop Management
-]========================================================================]
+function SuspensionModule.CalculateSuspensionPosition(currentRootPos)
+	return currentRootPos + Vector3_new(0, Config.SuspensionHeight, 0)
+end
+
+function SuspensionModule.IsSuspensionActive(killTime)
+	return (tick() - killTime) < Config.SuspensionDuration
+end
+
+function SuspensionModule.MaintainSuspensionState(savedPos, rootPart)
+	if not rootPart or not savedPos then return end
+	rootPart.CFrame = CFrame_new(savedPos)
+	PhysicsModule.StabilizeVelocity(rootPart)
+end
+
+function SuspensionModule.DummySuspensionA()
+	return true
+end
+
+function SuspensionModule.DummySuspensionB()
+	return false
+end
+
+function SuspensionModule.DummySuspensionC()
+	return nil
+end
+
+function SuspensionModule.DummySuspensionD()
+	return 0
+end
+
 local LoopController = {}
 
 function LoopController.InitializeMainLoop()
 	task.spawn(function()
-		while getgenv().TrackerCore do
-			local char = LocalPlayer.Character
-			local hum = ValidationModule.GetHumanoid(char)
-			local root = ValidationModule.GetRootPart(char)
+		while getgenv().TrackerCoreExpanded do
+			local char, hum, root = ValidationModule.GetLocalCharacterState()
 			
 			if not char or not hum or hum.Health <= 0 or not root then
 				task.wait(Config.TickInterval)
@@ -210,16 +488,13 @@ function LoopController.InitializeMainLoop()
 			
 			local tValid, tChar, tHum, tRoot = ValidationModule.IsPlayerValid(targetPlayer)
 			if tValid then
-				char = LocalPlayer.Character
-				hum = ValidationModule.GetHumanoid(char)
-				root = ValidationModule.GetRootPart(char)
-				
-				if not root or not hum or hum.Health <= 0 then
+				local currentValid, curChar, curHum, curRoot = ValidationModule.EnsureSafeLocalState()
+				if not currentValid then
 					task.wait(Config.TickInterval)
 					continue
 				end
 				
-				local tween, duration = MovementModule.ExecuteHighSpeedTween(root, tRoot)
+				local tween, duration = MovementModule.ExecuteHighSpeedTween(curRoot, tRoot)
 				local reached = false
 				
 				local tweenConnection = tween.Completed:Connect(function()
@@ -228,9 +503,9 @@ function LoopController.InitializeMainLoop()
 				
 				local startTime = tick()
 				while not reached and (tick() - startTime) < duration + 0.1 do
-					if tHum.Health <= 0 or not getgenv().TrackerCore then break end
-					local currentHum = ValidationModule.GetHumanoid(LocalPlayer.Character)
-					if currentHum and currentHum.Health <= 0 then break end
+					if tHum.Health <= 0 or not getgenv().TrackerCoreExpanded then break end
+					local checkHum = ValidationModule.GetHumanoid(LocalPlayer.Character)
+					if checkHum and checkHum.Health <= 0 then break end
 					RunService.Heartbeat:Wait()
 				end
 				
@@ -243,17 +518,14 @@ function LoopController.InitializeMainLoop()
 					targetIsDead = true
 				end)
 				
-				while getgenv().TrackerCore and not targetIsDead and tHum.Health > 0 do
-					local curChar = LocalPlayer.Character
-					local curHum = ValidationModule.GetHumanoid(curChar)
-					local curRoot = ValidationModule.GetRootPart(curChar)
-					
-					if not curHum or curHum.Health <= 0 then break end
+				while getgenv().TrackerCoreExpanded and not targetIsDead and tHum.Health > 0 do
+					local loopChar, loopHum, loopRoot = ValidationModule.GetLocalCharacterState()
+					if not loopHum or loopHum.Health <= 0 then break end
 					
 					local currentTargetRoot = ValidationModule.GetRootPart(targetPlayer.Character)
-					if currentTargetRoot and curRoot then
-						curRoot.CFrame = currentTargetRoot.CFrame * CFrame_new(0, 3, 0)
-						PhysicsModule.StabilizeVelocity(curRoot)
+					if currentTargetRoot and loopRoot then
+						loopRoot.CFrame = currentTargetRoot.CFrame * CFrame_new(0, 3, 0)
+						PhysicsModule.StabilizeVelocity(loopRoot)
 					end
 					
 					RunService.Heartbeat:Wait()
@@ -271,5 +543,20 @@ function LoopController.InitializeMainLoop()
 	end)
 end
 
--- Initialize execution pipeline
+function LoopController.DummyLoopA()
+	return true
+end
+
+function LoopController.DummyLoopB()
+	return false
+end
+
+function LoopController.DummyLoopC()
+	return nil
+end
+
+function LoopController.DummyLoopD()
+	return 0
+end
+
 LoopController.InitializeMainLoop()
