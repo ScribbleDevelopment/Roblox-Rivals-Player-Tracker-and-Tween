@@ -1,15 +1,15 @@
-if getgenv().TrackerCoreExpanded then
-	getgenv().TrackerCoreExpanded = false
+-- Rayfield UI Target Tracker Framework
+-- Designed for mobile executors and Rayfield interface
+
+if getgenv().RayfieldTracker then
+	getgenv().RayfieldTracker = false
 	task.wait(0.1)
 end
 
-getgenv().TrackerCoreExpanded = true
+getgenv().RayfieldTracker = true
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local CoreGui = game:GetService("CoreGui")
-local UserInputService = game:GetService("UserInputService")
-
 local LocalPlayer = Players.LocalPlayer
 
 local Config = {
@@ -22,705 +22,222 @@ local Config = {
 }
 
 local State = {
-	ActiveTarget = nil,
 	ManualSuspension = false,
 	FarmActive = true
 }
 
 local Whitelist = {}
-
-local math_sqrt = math.sqrt
 local math_huge = math.huge
-local tick = tick
 local Vector3_new = Vector3.new
 local CFrame_new = CFrame_new
-local ipairs = ipairs
 
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "TrackerControlGui"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = CoreGui
+-- Load Rayfield UI Library
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
-local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 320, 0, 340)
-MainFrame.Position = UDim2.new(0, 30, 0, 50)
-MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-MainFrame.BorderSizePixel = 0
-MainFrame.Active = true
-MainFrame.Parent = ScreenGui
+local Window = Rayfield:CreateWindow({
+	Name = "Scribster UI | Target Tracker",
+	LoadingTitle = "Initializing Tracker...",
+	LoadingSubtitle = "by tengo_yo (@Messy_tsb)",
+	ConfigurationSaving = {
+		Enabled = false
+	},
+	KeySystem = false
+})
 
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 10)
-UICorner.Parent = MainFrame
+local MainTab = Window:CreateTab("Main", 4483362458)
 
-local TitleBar = Instance.new("Frame")
-TitleBar.Size = UDim2.new(1, 0, 0, 45)
-TitleBar.BackgroundTransparency = 1
-TitleBar.Active = true
-TitleBar.Parent = MainFrame
+local StatusLabel = MainTab:CreateLabel("Status: Running")
 
-local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(1, 0, 1, 0)
-TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Tracker Controller"
-TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleLabel.TextSize = 18
-TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.Parent = TitleBar
-
-local HideButton = Instance.new("TextButton")
-HideButton.Size = UDim2.new(0, 45, 0, 45)
-HideButton.Position = UDim2.new(1, -45, 0, 0)
-HideButton.BackgroundTransparency = 1
-HideButton.Text = "-"
-HideButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-HideButton.TextSize = 22
-HideButton.Font = Enum.Font.GothamBold
-HideButton.ZIndex = 5
-HideButton.Parent = MainFrame
-
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.Size = UDim2.new(0, 280, 0, 45)
-ToggleButton.Position = UDim2.new(0, 20, 0, 55)
-ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.Text = "Air Suspension: OFF"
-ToggleButton.TextSize = 16
-ToggleButton.Font = Enum.Font.GothamMedium
-ToggleButton.ZIndex = 3
-ToggleButton.Parent = MainFrame
-
-local ToggleCorner = Instance.new("UICorner")
-ToggleCorner.CornerRadius = UDim.new(0, 8)
-ToggleCorner.Parent = ToggleButton
-
-local FarmButton = Instance.new("TextButton")
-FarmButton.Size = UDim2.new(0, 280, 0, 45)
-FarmButton.Position = UDim2.new(0, 20, 0, 110)
-FarmButton.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
-FarmButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-FarmButton.Text = "Farm / Teleport: ON"
-FarmButton.TextSize = 16
-FarmButton.Font = Enum.Font.GothamMedium
-FarmButton.ZIndex = 3
-FarmButton.Parent = MainFrame
-
-local FarmCorner = Instance.new("UICorner")
-FarmCorner.CornerRadius = UDim.new(0, 8)
-FarmCorner.Parent = FarmButton
-
-local UsernameBox = Instance.new("TextBox")
-UsernameBox.Size = UDim2.new(0, 280, 0, 45)
-UsernameBox.Position = UDim2.new(0, 20, 0, 165)
-UsernameBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-UsernameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-UsernameBox.PlaceholderText = "Enter Username"
-UsernameBox.Text = ""
-UsernameBox.TextSize = 16
-UsernameBox.Font = Enum.Font.Gotham
-UsernameBox.ZIndex = 3
-UsernameBox.Parent = MainFrame
-
-local BoxCorner = Instance.new("UICorner")
-BoxCorner.CornerRadius = UDim.new(0, 8)
-BoxCorner.Parent = UsernameBox
-
-local WhitelistButton = Instance.new("TextButton")
-WhitelistButton.Size = UDim2.new(0, 280, 0, 45)
-WhitelistButton.Position = UDim2.new(0, 20, 0, 220)
-WhitelistButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-WhitelistButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-WhitelistButton.Text = "Whitelist Player"
-WhitelistButton.TextSize = 16
-WhitelistButton.Font = Enum.Font.GothamMedium
-WhitelistButton.ZIndex = 3
-WhitelistButton.Parent = MainFrame
-
-local WhitelistCorner = Instance.new("UICorner")
-WhitelistCorner.CornerRadius = UDim.new(0, 8)
-WhitelistCorner.Parent = WhitelistButton
-
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Size = UDim2.new(1, 0, 0, 35)
-StatusLabel.Position = UDim2.new(0, 0, 0, 275)
-StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "Status: Running"
-StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-StatusLabel.TextSize = 14
-StatusLabel.Font = Enum.Font.Gotham
-StatusLabel.ZIndex = 3
-StatusLabel.Parent = MainFrame
-
-local dragging, dragInput, dragStart, startPos
-TitleBar.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		dragging = true
-		dragStart = input.Position
-		startPos = MainFrame.Position
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
-			end
-		end)
-	end
-end)
-
-TitleBar.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-		dragInput = input
-	end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-	if input == dragInput and dragging then
-		local delta = input.Position - dragStart
-		MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-	end
-end)
-
-local guiVisible = true
-HideButton.MouseButton1Click:Connect(function()
-	guiVisible = not guiVisible
-	for _, child in ipairs(MainFrame:GetChildren()) do
-		if child ~= TitleBar and child ~= HideButton and child ~= UICorner then
-			child.Visible = guiVisible
-		end
-	end
-	if guiVisible then
-		MainFrame.Size = UDim2.new(0, 320, 0, 340)
-		HideButton.Text = "-"
-	else
-		MainFrame.Size = UDim2.new(0, 320, 0, 45)
-		HideButton.Text = "+"
-	end
-end)
-
-ToggleButton.MouseButton1Click:Connect(function()
-	State.ManualSuspension = not State.ManualSuspension
-	if State.ManualSuspension then
-		ToggleButton.Text = "Air Suspension: ON"
-		ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
-	else
-		ToggleButton.Text = "Air Suspension: OFF"
-		ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-	end
-end)
-
-FarmButton.MouseButton1Click:Connect(function()
-	State.FarmActive = not State.FarmActive
-	if State.FarmActive then
-		FarmButton.Text = "Farm / Teleport: ON"
-		FarmButton.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
-	else
-		FarmButton.Text = "Farm / Teleport: OFF"
-		FarmButton.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
-	end
-end)
-
-WhitelistButton.MouseButton1Click:Connect(function()
-	local inputName = UsernameBox.Text
-	if inputName ~= "" then
-		for _, p in ipairs(Players:GetPlayers()) do
-			if p.Name:lower() == inputName:lower() or p.DisplayName:lower() == inputName:lower() then
-				Whitelist[p.Name] = true
-				Whitelist[p.DisplayName] = true
-				StatusLabel.Text = "Whitelisted: " .. p.Name
-				UsernameBox.Text = ""
-				task.delay(2, function()
-					if StatusLabel.Text == "Whitelisted: " .. p.Name then
-						StatusLabel.Text = "Status: Running"
-					end
-				end)
-				return
+MainTab:CreateToggle({
+	Name = "Air Suspension (Stay 100 Studs Up)",
+	CurrentValue = false,
+	Callback = function(Value)
+		State.ManualSuspension = Value
+		if State.ManualSuspension then
+			StatusLabel:Set("Status: Suspended in Air")
+		else
+			if State.FarmActive then
+				StatusLabel:Set("Status: Running")
+			else
+				StatusLabel:Set("Status: Stopped")
 			end
 		end
-		Whitelist[inputName] = true
-		StatusLabel.Text = "Whitelisted: " .. inputName
-		UsernameBox.Text = ""
-		task.delay(2, function()
-			if StatusLabel.Text == "Whitelisted: " .. inputName then
-				StatusLabel.Text = "Status: Running"
+	end,
+})
+
+MainTab:CreateToggle({
+	Name = "Farm / Teleport Loop",
+	CurrentValue = true,
+	Callback = function(Value)
+		State.FarmActive = Value
+		if State.FarmActive then
+			if not State.ManualSuspension then
+				StatusLabel:Set("Status: Running")
 			end
-		end)
-	end
-end)
+		else
+			StatusLabel:Set("Status: Stopped")
+		end
+	end,
+})
 
-local MathModule = {}
+local TargetInput = ""
+MainTab:CreateInput({
+	Name = "Whitelist Username",
+	PlaceholderText = "Enter exact username",
+	RemoveTextAfterFocusLost = false,	Callback = function(Text)
+		TargetInput = Text
+	end,
+})
 
-function MathModule.GetDistanceSquared(pos1, pos2)
-	local dx = pos1.X - pos2.X
-	local dy = pos1.Y - pos2.Y
-	local dz = pos1.Z - pos2.Z
-	return (dx * dx) + (dy * dy) + (dz * dz)
+MainTab:CreateButton({
+	Name = "Add to Whitelist",
+	Callback = function()
+		if TargetInput ~= "" then
+			Whitelist[TargetInput] = true
+			StatusLabel:Set("Whitelisted: " .. TargetInput)
+			task.delay(2, function()
+				if State.ManualSuspension then
+					StatusLabel:Set("Status: Suspended in Air")
+				elseif State.FarmActive then
+					StatusLabel:Set("Status: Running")
+				else
+					StatusLabel:Set("Status: Stopped")
+				end
+			end)
+		end
+	end,
+})
+
+local function GetHumanoid(char)
+	if not char then return nil end
+	return char:FindFirstChildOfClass("Humanoid")
 end
 
-function MathModule.FastMagnitude(pos1, pos2)
-	return math_sqrt(MathModule.GetDistanceSquared(pos1, pos2))
+local function GetRootPart(char)
+	if not char then return nil end
+	return char:FindFirstChild("HumanoidRootPart")
 end
 
-function MathModule.DummyFunctionA()
-	local x = 1
-	for i = 1, 10 do
-		x = x + i
-	end
-	return x
-end
-
-function MathModule.DummyFunctionB()
-	local y = 2
-	for i = 1, 5 do
-		y = y * i
-	end
-	return y
-end
-
-function MathModule.DummyFunctionC()
-	local z = Vector3_new(0, 0, 0)
-	return z
-end
-
-function MathModule.DummyFunctionD()
-	local t = tick()
-	return t
-end
-
-local ValidationModule = {}
-
-function ValidationModule.GetHumanoid(character)
-	if not character then return nil end
-	return character:FindFirstChildOfClass("Humanoid")
-end
-
-function ValidationModule.GetRootPart(character)
-	if not character then return nil end
-	return character:FindFirstChild("HumanoidRootPart")
-end
-
-function ValidationModule.GetHead(character)
-	if not character then return nil end
-	return character:FindFirstChild("Head")
-end
-
-function ValidationModule.IsCharacterUsable(character)
-	if not character then return false end
-	local humanoid = ValidationModule.GetHumanoid(character)
-	local rootPart = ValidationModule.GetRootPart(character)
-	if not humanoid or not rootPart then return false end
-	if humanoid.Health <= 0 then return false end
-	return true, humanoid, rootPart
-end
-
-function ValidationModule.IsPlayerValid(player)
+local function IsPlayerValid(player)
 	if not player or player == LocalPlayer then return false end
 	if Whitelist[player.Name] or Whitelist[player.DisplayName] then return false end
-	local character = player.Character
-	if not character then return false end
-	local isValid, hum, root = ValidationModule.IsCharacterUsable(character)
-	if not isValid then return false end
-	return true, character, hum, root
-end
-
-function ValidationModule.GetLocalCharacterState()
-	local char = LocalPlayer.Character
-	if not char then return nil, nil, nil end
-	local hum = ValidationModule.GetHumanoid(char)
-	local root = ValidationModule.GetRootPart(char)
-	return char, hum, root
-end
-
-function ValidationModule.IsLocalAlive()
-	local _, hum, root = ValidationModule.GetLocalCharacterState()
-	return hum and hum.Health > 0 and root ~= nil
-end
-
-function ValidationModule.EnsureSafeLocalState()
-	local char, hum, root = ValidationModule.GetLocalCharacterState()
-	if not char or not hum or not root then return false end
-	if hum.Health <= 0 then return false end
+	local char = player.Character
+	if not char then return false end
+	local hum = GetHumanoid(char)
+	local root = GetRootPart(char)
+	if not hum or not root or hum.Health <= 0 then return false end
 	return true, char, hum, root
 end
 
-function ValidationModule.DummyValidationA()
-	return true
-end
-
-function ValidationModule.DummyValidationB()
-	return false
-end
-
-function ValidationModule.DummyValidationC()
-	return nil
-end
-
-function ValidationModule.DummyValidationD()
-	return LocalPlayer ~= nil
-end
-
-local TargetModule = {}
-
-function TargetModule.FindOptimalTarget(myRootPos)
-	local bestTarget = nil
-	local lowestHealth = math_huge
-	local maxDistSq = Config.MaxDistance * Config.MaxDistance
-	
-	for _, player in ipairs(Players:GetPlayers()) do
-		local isValid, char, hum, root = ValidationModule.IsPlayerValid(player)
-		if isValid then
-			local distSq = MathModule.GetDistanceSquared(root.Position, myRootPos)
-			if distSq <= maxDistSq then
-				if hum.Health < lowestHealth then
-					lowestHealth = hum.Health
-					bestTarget = player
+task.spawn(function()
+	local manualSavedPos = nil
+	while getgenv().RayfieldTracker do
+		local char = LocalPlayer.Character
+		local hum = GetHumanoid(char)
+		local root = GetRootPart(char)
+		
+		if not char or not hum or hum.Health <= 0 or not root then
+			manualSavedPos = nil
+			task.wait(Config.TickInterval)
+			continue
+		end
+		
+		if not State.FarmActive then
+			manualSavedPos = nil
+			task.wait(Config.TickInterval)
+			continue
+		end
+		
+		if State.ManualSuspension then
+			if not manualSavedPos then
+				manualSavedPos = root.Position + Vector3_new(0, Config.SuspensionHeight, 0)
+			end
+			root.CFrame = CFrame_new(manualSavedPos)
+			root.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
+			root.AssemblyAngularVelocity = Vector3_new(0, 0, 0)
+			RunService.Heartbeat:Wait()
+			continue
+		else
+			manualSavedPos = nil
+		end
+		
+		if root.Position.Y < Config.VoidThreshold then
+			root.CFrame = CFrame_new(root.Position.X, Config.SafeSpawnHeight, root.Position.Z)
+			root.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
+		end
+		
+		local bestTarget = nil
+		local lowestHealth = math_huge
+		local maxDistSq = Config.MaxDistance * Config.MaxDistance
+		
+		for _, player in ipairs(Players:GetPlayers()) do
+			local isValid, _, tHum, tRoot = IsPlayerValid(player)
+			if isValid then
+				local dx = tRoot.Position.X - root.Position.X
+				local dy = tRoot.Position.Y - root.Position.Y
+				local dz = tRoot.Position.Z - root.Position.Z
+				local distSq = (dx * dx) + (dy * dy) + (dz * dz)
+				if distSq <= maxDistSq then
+					if tHum.Health < lowestHealth then
+						lowestHealth = tHum.Health
+						bestTarget = player
+					end
 				end
 			end
 		end
-	end
-	
-	return bestTarget
-end
-
-function TargetModule.EvaluateTargetHealth(targetPlayer)
-	if not targetPlayer then return math_huge end
-	local isValid, _, hum = ValidationModule.IsPlayerValid(targetPlayer)
-	if not isValid then return math_huge end
-	return hum.Health
-end
-
-function TargetModule.IsTargetStillAlive(targetPlayer)
-	if not targetPlayer then return false end
-	local isValid = ValidationModule.IsPlayerValid(targetPlayer)
-	return isValid
-end
-
-function TargetModule.GetTargetRootPosition(targetPlayer)
-	if not targetPlayer then return nil end
-	local char = targetPlayer.Character
-	local root = ValidationModule.GetRootPart(char)
-	if root then
-		return root.Position
-	end
-	return nil
-end
-
-function TargetModule.CountValidTargetsInRange(myRootPos)
-	local count = 0
-	local maxDistSq = Config.MaxDistance * Config.MaxDistance
-	for _, player in ipairs(Players:GetPlayers()) do
-		local isValid, _, _, root = ValidationModule.IsPlayerValid(player)
-		if isValid then
-			if MathModule.GetDistanceSquared(root.Position, myRootPos) <= maxDistSq then
-				count = count + 1
-			end
-		end
-	end
-	return count
-end
-
-function TargetModule.GetClosestTarget(myRootPos)
-	local bestTarget = nil
-	local shortestDistSq = math_huge
-	local maxDistSq = Config.MaxDistance * Config.MaxDistance
-	
-	for _, player in ipairs(Players:GetPlayers()) do
-		local isValid, _, _, root = ValidationModule.IsPlayerValid(player)
-		if isValid then
-			local distSq = MathModule.GetDistanceSquared(root.Position, myRootPos)
-			if distSq <= maxDistSq and distSq < shortestDistSq then
-				shortestDistSq = distSq
-				bestTarget = player
-			end
-		end
-	end
-	
-	return bestTarget
-end
-
-function TargetModule.DummyTargetA()
-	return nil
-end
-
-function TargetModule.DummyTargetB()
-	return 0
-end
-
-function TargetModule.DummyTargetC()
-	return {}
-end
-
-function TargetModule.DummyTargetD()
-	return true
-end
-
-local PhysicsModule = {}
-
-function PhysicsModule.VerifyVoidBoundary(rootPart)
-	if not rootPart then return end
-	if rootPart.Position.Y < Config.VoidThreshold then
-		rootPart.CFrame = CFrame_new(rootPart.Position.X, Config.SafeSpawnHeight, rootPart.Position.Z)
-		PhysicsModule.StabilizeVelocity(rootPart)
-	end
-end
-
-function PhysicsModule.StabilizeVelocity(rootPart)
-	if not rootPart then return end
-	rootPart.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
-	rootPart.AssemblyAngularVelocity = Vector3_new(0, 0, 0)
-end
-
-function PhysicsModule.LockInPlace(rootPart, cframe)
-	if not rootPart or not cframe then return end
-	rootPart.CFrame = cframe
-	PhysicsModule.StabilizeVelocity(rootPart)
-end
-
-function PhysicsModule.ApplyAntiRagdoll(humanoid)
-	if not humanoid then return end
-	pcall(function()
-		humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-		humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-	end)
-end
-
-function PhysicsModule.ResetState(rootPart)
-	if not rootPart then return end
-	PhysicsModule.StabilizeVelocity(rootPart)
-end
-
-function PhysicsModule.IsRootPartGrounded(rootPart)
-	if not rootPart then return false end
-	return rootPart.AssemblyLinearVelocity.Magnitude < 0.5
-end
-
-function PhysicsModule.ForcePositionUpdate(rootPart, newCFrame)
-	if not rootPart or not newCFrame then return end
-	rootPart.CFrame = newCFrame
-end
-
-function PhysicsModule.ClearMomentum(rootPart)
-	if not rootPart then return end
-	rootPart.Velocity = Vector3_new(0, 0, 0)
-	rootPart.RotVelocity = Vector3_new(0, 0, 0)
-end
-
-function PhysicsModule.DummyPhysicsA()
-	return true
-end
-
-function PhysicsModule.DummyPhysicsB()
-	return false
-end
-
-function PhysicsModule.DummyPhysicsC()
-	return nil
-end
-
-function PhysicsModule.DummyPhysicsD()
-	return 0
-end
-
-local MovementModule = {}
-
-function MovementModule.ExecuteInstantTeleport(rootPart, targetRoot)
-	if not rootPart or not targetRoot then return end
-	rootPart.CFrame = targetRoot.CFrame * CFrame_new(0, 3, 0)
-	PhysicsModule.StabilizeVelocity(rootPart)
-end
-
-function MovementModule.CalculateTweenDuration(pos1, pos2)
-	local distance = MathModule.FastMagnitude(pos1, pos2)
-	return math_clamp(distance / 500, 0.05, 0.3)
-end
-
-function MovementModule.CreateLinearTween(rootPart, targetCFrame, duration)
-	if not rootPart or not targetCFrame then return end
-	local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
-	return game:GetService("TweenService"):Create(rootPart, tweenInfo, {CFrame = targetCFrame})
-end
-
-function MovementModule.VerifyTweenDestination(targetRoot)
-	if not targetRoot then return CFrame_new() end
-	return targetRoot.CFrame * CFrame_new(0, 3, 0)
-end
-
-function MovementModule.ProcessTweenStep(tween)
-	if tween then
-		tween:Play()
-	end
-end
-
-function MovementModule.CancelTween(tween)
-	if tween then
-		pcall(function() tween:Cancel() end)
-	end
-end
-
-function MovementModule.DummyMovementA()
-	return true
-end
-
-function MovementModule.DummyMovementB()
-	return false
-end
-
-function MovementModule.DummyMovementC()
-	return nil
-end
-
-function MovementModule.DummyMovementD()
-	return 0
-end
-
-local SuspensionModule = {}
-
-function SuspensionModule.ExecuteSuspensionSequence()
-	local killTime = tick()
-	local savedPos = nil
-	
-	while getgenv().TrackerCoreExpanded and (tick() - killTime) < Config.SuspensionDuration do
-		if State.ManualSuspension or not State.FarmActive then break end
-		local char, hum, root = ValidationModule.GetLocalCharacterState()
 		
-		if not hum or hum.Health <= 0 then break end
-		
-		if root then
-			if not savedPos then
-				savedPos = root.Position + Vector3_new(0, Config.SuspensionHeight, 0)
-			end
-			root.CFrame = CFrame_new(savedPos)
-			PhysicsModule.StabilizeVelocity(root)
-		end
-		
-		RunService.Heartbeat:Wait()
-	end
-end
-
-function SuspensionModule.CalculateSuspensionPosition(currentRootPos)
-	return currentRootPos + Vector3_new(0, Config.SuspensionHeight, 0)
-end
-
-function SuspensionModule.IsSuspensionActive(killTime)
-	return (tick() - killTime) < Config.SuspensionDuration
-end
-
-function SuspensionModule.MaintainSuspensionState(savedPos, rootPart)
-	if not rootPart or not savedPos then return end
-	rootPart.CFrame = CFrame_new(savedPos)
-	PhysicsModule.StabilizeVelocity(rootPart)
-end
-
-function SuspensionModule.DummySuspensionA()
-	return true
-end
-
-function SuspensionModule.DummySuspensionB()
-	return false
-end
-
-function SuspensionModule.DummySuspensionC()
-	return nil
-end
-
-function SuspensionModule.DummySuspensionD()
-	return 0
-end
-
-local LoopController = {}
-
-function LoopController.InitializeMainLoop()
-	task.spawn(function()
-		local manualSavedPos = nil
-		while getgenv().TrackerCoreExpanded do
-			local char, hum, root = ValidationModule.GetLocalCharacterState()
-			
-			if not char or not hum or hum.Health <= 0 or not root then
-				manualSavedPos = nil
-				task.wait(Config.TickInterval)
-				continue
-			end
-			
-			if not State.FarmActive then
-				manualSavedPos = nil
-				task.wait(Config.TickInterval)
-				continue
-			end
-			
-			if State.ManualSuspension then
-				if not manualSavedPos then
-					manualSavedPos = root.Position + Vector3_new(0, Config.SuspensionHeight, 0)
-				end
-				root.CFrame = CFrame_new(manualSavedPos)
-				PhysicsModule.StabilizeVelocity(root)
-				RunService.Heartbeat:Wait()
-				continue
-			else
-				manualSavedPos = nil
-			end
-			
-			PhysicsModule.VerifyVoidBoundary(root)
-			
-			local targetPlayer = TargetModule.FindOptimalTarget(root.Position)
-			if not targetPlayer then
-				task.wait(Config.TickInterval)
-				continue
-			end
-			
-			local tValid, tChar, tHum, tRoot = ValidationModule.IsPlayerValid(targetPlayer)
-			if tValid then
-				local currentValid, curChar, curHum, curRoot = ValidationModule.EnsureSafeLocalState()
-				if not currentValid or curHum.Health <= 0 then
-					task.wait(Config.TickInterval)
-					continue
-				end
-				
-				MovementModule.ExecuteInstantTeleport(curRoot, tRoot)
+		if bestTarget then
+			local _, tChar, tHum, tRoot = IsPlayerValid(bestTarget)
+			if tRoot and tHum and tHum.Health > 0 then
+				root.CFrame = tRoot.CFrame * CFrame_new(0, 3, 0)
+				root.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
 				
 				local targetIsDead = false
-				local deathConnection = tHum.Died:Connect(function()
+				local diedConn = tHum.Died:Connect(function()
 					targetIsDead = true
 				end)
 				
-				while getgenv().TrackerCoreExpanded and not targetIsDead and tHum.Health > 0 do
+				while getgenv().RayfieldTracker and not targetIsDead and tHum.Health > 0 do
 					if State.ManualSuspension or not State.FarmActive then break end
-					local loopChar, loopHum, loopRoot = ValidationModule.GetLocalCharacterState()
-					if not loopHum or loopHum.Health <= 0 then break end
+					local curChar = LocalPlayer.Character
+					local curHum = GetHumanoid(curChar)
+					local curRoot = GetRootPart(curChar)
+					if not curHum or curHum.Health <= 0 then break end
 					
-					local currentTargetRoot = ValidationModule.GetRootPart(targetPlayer.Character)
-					if currentTargetRoot and loopRoot then
-						loopRoot.CFrame = currentTargetRoot.CFrame * CFrame_new(0, 3, 0)
-						PhysicsModule.StabilizeVelocity(loopRoot)
+					local currentTargetRoot = GetRootPart(bestTarget.Character)
+					if currentTargetRoot and curRoot then
+						curRoot.CFrame = currentTargetRoot.CFrame * CFrame_new(0, 3, 0)
+						curRoot.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
 					end
-					
 					RunService.Heartbeat:Wait()
 				end
 				
-				if deathConnection then
-					deathConnection:Disconnect()
-				end
+				if diedConn then diedConn:Disconnect() end
 				
 				if not State.ManualSuspension and State.FarmActive then
-					SuspensionModule.ExecuteSuspensionSequence()
+					local killTime = tick()
+					local savedUpPos = nil
+					while getgenv().RayfieldTracker and (tick() - killTime) < Config.SuspensionDuration do
+						if State.ManualSuspension or not State.FarmActive then break end
+						local cChar = LocalPlayer.Character
+						local cHum = GetHumanoid(cChar)
+						local cRoot = GetRootPart(cChar)
+						if not cHum or cHum.Health <= 0 then break end
+						if cRoot then
+							if not savedUpPos then
+								savedUpPos = cRoot.Position + Vector3_new(0, Config.SuspensionHeight, 0)
+							end
+							cRoot.CFrame = CFrame_new(savedUpPos)
+							cRoot.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
+						end
+						RunService.Heartbeat:Wait()
+					end
 				end
 			else
 				task.wait(Config.TickInterval)
 			end
+		else
+			task.wait(Config.TickInterval)
 		end
-	end)
-end
-
-function LoopController.DummyLoopA()
-	return true
-end
-
-function LoopController.DummyLoopB()
-	return false
-end
-
-function LoopController.DummyLoopC()
-	return nil
-end
-
-function LoopController.DummyLoopD()
-	return 0
-end
-
-LoopController.InitializeMainLoop()
+	end
+end)
