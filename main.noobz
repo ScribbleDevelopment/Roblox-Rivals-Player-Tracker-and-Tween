@@ -6,6 +6,7 @@ end
 getgenv().TrackerCoreExpanded = true
 
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local CoreGui = game:GetService("CoreGui")
@@ -15,6 +16,7 @@ local LocalPlayer = Players.LocalPlayer
 
 local Config = {
 	MaxDistance = 1000,
+	TweenSpeed = 500,
 	SuspensionHeight = 100,
 	SuspensionDuration = 0.5,
 	VoidThreshold = -400,
@@ -27,13 +29,13 @@ local State = {
 	LastPosition = Vector3.zero,
 	IsSuspended = false,
 	SessionStartTime = tick(),
-	ManualSuspension = false,
 	FarmActive = true
 }
 
 local Whitelist = {}
 
 local math_sqrt = math.sqrt
+local math_clamp = math.clamp
 local math_huge = math.huge
 local tick = tick
 local Vector3_new = Vector3.new
@@ -63,7 +65,7 @@ if not SuccessGui or not ScreenGui then
 end
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 320, 0, 290)
+MainFrame.Size = UDim2.new(0, 320, 0, 235)
 MainFrame.Position = UDim2.new(0, 30, 0, 50)
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 MainFrame.BorderSizePixel = 0
@@ -93,23 +95,9 @@ HideButton.TextSize = 22
 HideButton.Font = Enum.Font.GothamBold
 HideButton.Parent = MainFrame
 
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.Size = UDim2.new(0, 280, 0, 45)
-ToggleButton.Position = UDim2.new(0, 20, 0, 55)
-ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.Text = "Air Suspension: OFF (not working dont use this)"
-ToggleButton.TextSize = 16
-ToggleButton.Font = Enum.Font.GothamMedium
-ToggleButton.Parent = MainFrame
-
-local ToggleCorner = Instance.new("UICorner")
-ToggleCorner.CornerRadius = UDim.new(0, 8)
-ToggleCorner.Parent = ToggleButton
-
 local FarmButton = Instance.new("TextButton")
 FarmButton.Size = UDim2.new(0, 280, 0, 45)
-FarmButton.Position = UDim2.new(0, 20, 0, 110)
+FarmButton.Position = UDim2.new(0, 20, 0, 55)
 FarmButton.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
 FarmButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 FarmButton.Text = "Farm / Teleport: ON"
@@ -123,7 +111,7 @@ FarmCorner.Parent = FarmButton
 
 local UsernameBox = Instance.new("TextBox")
 UsernameBox.Size = UDim2.new(0, 280, 0, 45)
-UsernameBox.Position = UDim2.new(0, 20, 0, 165)
+UsernameBox.Position = UDim2.new(0, 20, 0, 110)
 UsernameBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 UsernameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 UsernameBox.PlaceholderText = "Enter Username"
@@ -138,7 +126,7 @@ BoxCorner.Parent = UsernameBox
 
 local WhitelistButton = Instance.new("TextButton")
 WhitelistButton.Size = UDim2.new(0, 280, 0, 45)
-WhitelistButton.Position = UDim2.new(0, 20, 0, 220)
+WhitelistButton.Position = UDim2.new(0, 20, 0, 165)
 WhitelistButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 WhitelistButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 WhitelistButton.Text = "Whitelist Player"
@@ -186,22 +174,11 @@ HideButton.MouseButton1Click:Connect(function()
 		end
 	end
 	if guiVisible then
-		MainFrame.Size = UDim2.new(0, 320, 0, 290)
+		MainFrame.Size = UDim2.new(0, 320, 0, 235)
 		HideButton.Text = "-"
 	else
 		MainFrame.Size = UDim2.new(0, 320, 0, 45)
 		HideButton.Text = "+"
-	end
-end)
-
-ToggleButton.MouseButton1Click:Connect(function()
-	State.ManualSuspension = not State.ManualSuspension
-	if State.ManualSuspension then
-		ToggleButton.Text = "Air Suspension: ON"
-		ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
-	else
-		ToggleButton.Text = "Air Suspension: OFF"
-		ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 	end
 end)
 
@@ -398,10 +375,19 @@ end
 
 local MovementModule = {}
 
-function MovementModule.ExecuteInstantTeleport(rootPart, targetRoot)
+function MovementModule.ExecuteHighSpeedTween(rootPart, targetRoot)
 	if not rootPart or not targetRoot then return end
-	rootPart.CFrame = targetRoot.CFrame * CFrame_new(0, 3, 0)
-	PhysicsModule.StabilizeVelocity(rootPart)
+	
+	local distance = MathModule.FastMagnitude(rootPart.Position, targetRoot.Position)
+	local duration = math_clamp(distance / Config.TweenSpeed, 0.05, 0.3)
+	
+	local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
+	local goalCFrame = targetRoot.CFrame * CFrame_new(0, 3, 0)
+	
+	local tween = TweenService:Create(rootPart, tweenInfo, {CFrame = goalCFrame})
+	tween:Play()
+	
+	return tween, duration
 end
 
 function MovementModule.DummyMovementA()
@@ -427,7 +413,7 @@ function SuspensionModule.ExecuteSuspensionSequence()
 	local fixedSuspPos = nil
 	
 	while getgenv().TrackerCoreExpanded and (tick() - killTime) < Config.SuspensionDuration do
-		if State.ManualSuspension or not State.FarmActive then break end
+		if not State.FarmActive then break end
 		local char, hum, root = ValidationModule.GetLocalCharacterState()
 		
 		if not hum or hum.Health <= 0 then break end
@@ -464,32 +450,17 @@ local LoopController = {}
 
 function LoopController.InitializeMainLoop()
 	task.spawn(function()
-		local manualSavedPos = nil
 		while getgenv().TrackerCoreExpanded do
 			local char, hum, root = ValidationModule.GetLocalCharacterState()
 			
 			if not char or not hum or hum.Health <= 0 or not root then
-				manualSavedPos = nil
 				task.wait(Config.TickInterval)
 				continue
 			end
 			
 			if not State.FarmActive then
-				manualSavedPos = nil
 				task.wait(Config.TickInterval)
 				continue
-			end
-			
-			if State.ManualSuspension then
-				if not manualSavedPos then
-					manualSavedPos = root.Position + Vector3_new(0, Config.SuspensionHeight, 0)
-				end
-				root.CFrame = CFrame_new(manualSavedPos)
-				PhysicsModule.StabilizeVelocity(root)
-				RunService.Heartbeat:Wait()
-				continue
-			else
-				manualSavedPos = nil
 			end
 			
 			PhysicsModule.VerifyVoidBoundary(root)
@@ -508,7 +479,25 @@ function LoopController.InitializeMainLoop()
 					continue
 				end
 				
-				MovementModule.ExecuteInstantTeleport(curRoot, tRoot)
+				local tween, duration = MovementModule.ExecuteHighSpeedTween(curRoot, tRoot)
+				local reached = false
+				
+				local tweenConnection = tween.Completed:Connect(function()
+					reached = true
+				end)
+				
+				local startTime = tick()
+				while not reached and (tick() - startTime) < duration + 0.1 do
+					if not State.FarmActive then break end
+					if tHum.Health <= 0 or not getgenv().TrackerCoreExpanded then break end
+					local checkHum = ValidationModule.GetHumanoid(LocalPlayer.Character)
+					if checkHum and checkHum.Health <= 0 then break end
+					RunService.Heartbeat:Wait()
+				end
+				
+				if tweenConnection then
+					tweenConnection:Disconnect()
+				end
 				
 				local targetIsDead = false
 				local deathConnection = tHum.Died:Connect(function()
@@ -516,7 +505,7 @@ function LoopController.InitializeMainLoop()
 				end)
 				
 				while getgenv().TrackerCoreExpanded and not targetIsDead and tHum.Health > 0 do
-					if State.ManualSuspension or not State.FarmActive then break end
+					if not State.FarmActive then break end
 					local loopChar, loopHum, loopRoot = ValidationModule.GetLocalCharacterState()
 					if not loopHum or loopHum.Health <= 0 then break end
 					
@@ -533,7 +522,7 @@ function LoopController.InitializeMainLoop()
 					deathConnection:Disconnect()
 				end
 				
-				if not State.ManualSuspension and State.FarmActive then
+				if State.FarmActive then
 					SuspensionModule.ExecuteSuspensionSequence()
 				end
 			else
