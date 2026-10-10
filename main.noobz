@@ -1,66 +1,52 @@
--- Rayfield UI Target Tracker Framework
--- Designed for mobile executors and Rayfield interface
-
-if getgenv().RayfieldTracker then
-	getgenv().RayfieldTracker = false
+-- Stop any previously running tracker instances
+if getgenv().TrackerActive then
+	getgenv().TrackerActive = false
 	task.wait(0.1)
 end
 
-getgenv().RayfieldTracker = true
+getgenv().TrackerActive = true
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
-local Config = {
-	MaxDistance = 1000,
-	SuspensionHeight = 100,
-	SuspensionDuration = 0.5,
-	VoidThreshold = -400,
-	SafeSpawnHeight = 100,
-	TickInterval = 0.2
-}
-
-local State = {
-	ManualSuspension = false,
-	FarmActive = true
-}
-
 local Whitelist = {}
-local math_huge = math.huge
-local Vector3_new = Vector3.new
-local CFrame_new = CFrame_new
 
--- Load Rayfield UI Library
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
 	Name = "Scribster UI | Target Tracker",
 	LoadingTitle = "Initializing Tracker...",
 	LoadingSubtitle = "by tengo_yo (@Messy_tsb)",
-	ConfigurationSaving = {
-		Enabled = false
-	},
+	ConfigurationSaving = { Enabled = false },
 	KeySystem = false
 })
 
 local MainTab = Window:CreateTab("Main", 4483362458)
-
 local StatusLabel = MainTab:CreateLabel("Status: Running")
 
 MainTab:CreateToggle({
 	Name = "Air Suspension (Stay 100 Studs Up)",
 	CurrentValue = false,
 	Callback = function(Value)
-		State.ManualSuspension = Value
-		if State.ManualSuspension then
+		if Value then
 			StatusLabel:Set("Status: Suspended in Air")
+			task.spawn(function()
+				while getgenv().TrackerActive and _G.RayfieldManualSuspension do
+					local char = LocalPlayer.Character
+					local hum = char and char:FindFirstChildOfClass("Humanoid")
+					local root = char and char:FindFirstChild("HumanoidRootPart")
+					if hum and hum.Health > 0 and root then
+						root.CFrame = root.CFrame + Vector3.new(0, 100, 0)
+						root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+						root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+					end
+					RunService.Heartbeat:Wait()
+				end
+			end)
 		else
-			if State.FarmActive then
-				StatusLabel:Set("Status: Running")
-			else
-				StatusLabel:Set("Status: Stopped")
-			end
+			StatusLabel:Set("Status: Running")
 		end
 	end,
 })
@@ -69,11 +55,8 @@ MainTab:CreateToggle({
 	Name = "Farm / Teleport Loop",
 	CurrentValue = true,
 	Callback = function(Value)
-		State.FarmActive = Value
-		if State.FarmActive then
-			if not State.ManualSuspension then
-				StatusLabel:Set("Status: Running")
-			end
+		if Value then
+			StatusLabel:Set("Status: Running")
 		else
 			StatusLabel:Set("Status: Stopped")
 		end
@@ -84,7 +67,8 @@ local TargetInput = ""
 MainTab:CreateInput({
 	Name = "Whitelist Username",
 	PlaceholderText = "Enter exact username",
-	RemoveTextAfterFocusLost = false,	Callback = function(Text)
+	RemoveTextAfterFocusLost = false,
+	Callback = function(Text)
 		TargetInput = Text
 	end,
 })
@@ -96,148 +80,116 @@ MainTab:CreateButton({
 			Whitelist[TargetInput] = true
 			StatusLabel:Set("Whitelisted: " .. TargetInput)
 			task.delay(2, function()
-				if State.ManualSuspension then
-					StatusLabel:Set("Status: Suspended in Air")
-				elseif State.FarmActive then
-					StatusLabel:Set("Status: Running")
-				else
-					StatusLabel:Set("Status: Stopped")
-				end
+				StatusLabel:Set("Status: Running")
 			end)
 		end
 	end,
 })
 
-local function GetHumanoid(char)
-	if not char then return nil end
-	return char:FindFirstChildOfClass("Humanoid")
-end
-
-local function GetRootPart(char)
-	if not char then return nil end
-	return char:FindFirstChild("HumanoidRootPart")
-end
-
-local function IsPlayerValid(player)
-	if not player or player == LocalPlayer then return false end
-	if Whitelist[player.Name] or Whitelist[player.DisplayName] then return false end
-	local char = player.Character
-	if not char then return false end
-	local hum = GetHumanoid(char)
-	local root = GetRootPart(char)
-	if not hum or not root or hum.Health <= 0 then return false end
-	return true, char, hum, root
+local function getLowestHealthTarget(myRoot)
+	local bestTarget = nil
+	local lowestHealth = math.huge
+	
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer and not Whitelist[p.Name] and not Whitelist[p.DisplayName] then
+			local char = p.Character
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
+			local root = char and char:FindFirstChild("HumanoidRootPart")
+			if hum and hum.Health > 0 and root then
+				local dist = (root.Position - myRoot.Position).Magnitude
+				if dist <= 1000 and hum.Health < lowestHealth then
+					lowestHealth = hum.Health
+					bestTarget = p
+				end
+			end
+		end
+	end
+	return bestTarget
 end
 
 task.spawn(function()
-	local manualSavedPos = nil
-	while getgenv().RayfieldTracker do
-		local char = LocalPlayer.Character
-		local hum = GetHumanoid(char)
-		local root = GetRootPart(char)
+	while getgenv().TrackerActive do
+		local character = LocalPlayer.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		local rootPart = character and character:FindFirstChild("HumanoidRootPart")
 		
-		if not char or not hum or hum.Health <= 0 or not root then
-			manualSavedPos = nil
-			task.wait(Config.TickInterval)
+		if not character or not humanoid or humanoid.Health <= 0 or not rootPart then
+			task.wait(0.5)
 			continue
 		end
 		
-		if not State.FarmActive then
-			manualSavedPos = nil
-			task.wait(Config.TickInterval)
+		if rootPart.Position.Y < -400 then
+			rootPart.CFrame = CFrame.new(rootPart.Position.X, 100, rootPart.Position.Z)
+			rootPart.AssemblyLinearVelocity = Vector3.zero
+		end
+		
+		local target = getLowestHealthTarget(rootPart)
+		if not target then
+			task.wait(0.2)
 			continue
 		end
 		
-		if State.ManualSuspension then
-			if not manualSavedPos then
-				manualSavedPos = root.Position + Vector3_new(0, Config.SuspensionHeight, 0)
+		local targetChar = target.Character
+		local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+		local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
+		
+		if targetRoot and targetHum and targetHum.Health > 0 then
+			character = LocalPlayer.Character
+			humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			rootPart = character and character:FindFirstChild("HumanoidRootPart")
+			
+			if not rootPart or not humanoid or humanoid.Health <= 0 then
+				task.wait(0.2)
+				continue
 			end
-			root.CFrame = CFrame_new(manualSavedPos)
-			root.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
-			root.AssemblyAngularVelocity = Vector3_new(0, 0, 0)
-			RunService.Heartbeat:Wait()
-			continue
-		else
-			manualSavedPos = nil
-		end
-		
-		if root.Position.Y < Config.VoidThreshold then
-			root.CFrame = CFrame_new(root.Position.X, Config.SafeSpawnHeight, root.Position.Z)
-			root.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
-		end
-		
-		local bestTarget = nil
-		local lowestHealth = math_huge
-		local maxDistSq = Config.MaxDistance * Config.MaxDistance
-		
-		for _, player in ipairs(Players:GetPlayers()) do
-			local isValid, _, tHum, tRoot = IsPlayerValid(player)
-			if isValid then
-				local dx = tRoot.Position.X - root.Position.X
-				local dy = tRoot.Position.Y - root.Position.Y
-				local dz = tRoot.Position.Z - root.Position.Z
-				local distSq = (dx * dx) + (dy * dy) + (dz * dz)
-				if distSq <= maxDistSq then
-					if tHum.Health < lowestHealth then
-						lowestHealth = tHum.Health
-						bestTarget = player
-					end
+			
+			rootPart.CFrame = targetRoot.CFrame * CFrame.new(0, 3, 0)
+			rootPart.AssemblyLinearVelocity = Vector3.zero
+			
+			local isDead = false
+			local diedConn = targetHum.Died:Connect(function()
+				isDead = true
+			end)
+			
+			while getgenv().TrackerActive and not isDead and targetHum.Health > 0 do
+				local currentChars = LocalPlayer.Character
+				local currentHums = currentChars and currentChars:FindFirstChildOfClass("Humanoid")
+				local currentRoots = currentChars and currentChars:FindFirstChild("HumanoidRootPart")
+				
+				if not currentHums or currentHums.Health <= 0 then break end
+				
+				local tRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+				if tRoot and currentRoots then
+					currentRoots.CFrame = tRoot.CFrame * CFrame.new(0, 3, 0)
+					currentRoots.AssemblyLinearVelocity = Vector3.zero
 				end
+				RunService.Heartbeat:Wait()
 			end
-		end
-		
-		if bestTarget then
-			local _, tChar, tHum, tRoot = IsPlayerValid(bestTarget)
-			if tRoot and tHum and tHum.Health > 0 then
-				root.CFrame = tRoot.CFrame * CFrame_new(0, 3, 0)
-				root.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
+			
+			if diedConn then diedConn:Disconnect() end
+			
+			local killTime = tick()
+			local savedUpPosition = nil
+			
+			while getgenv().TrackerActive and (tick() - killTime) < 1.5 do
+				local currentChars = LocalPlayer.Character
+				local currentHums = currentChars and currentChars:FindFirstChildOfClass("Humanoid")
+				local currentRoots = currentChars and currentChars:FindFirstChild("HumanoidRootPart")
 				
-				local targetIsDead = false
-				local diedConn = tHum.Died:Connect(function()
-					targetIsDead = true
-				end)
+				if not currentHums or currentHums.Health <= 0 then break end
 				
-				while getgenv().RayfieldTracker and not targetIsDead and tHum.Health > 0 do
-					if State.ManualSuspension or not State.FarmActive then break end
-					local curChar = LocalPlayer.Character
-					local curHum = GetHumanoid(curChar)
-					local curRoot = GetRootPart(curChar)
-					if not curHum or curHum.Health <= 0 then break end
-					
-					local currentTargetRoot = GetRootPart(bestTarget.Character)
-					if currentTargetRoot and curRoot then
-						curRoot.CFrame = currentTargetRoot.CFrame * CFrame_new(0, 3, 0)
-						curRoot.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
+				if currentRoots then
+					if not savedUpPosition then
+						savedUpPosition = currentRoots.Position + Vector3.new(0, 900, 0)
 					end
-					RunService.Heartbeat:Wait()
+					currentRoots.CFrame = CFrame.new(savedUpPosition)
+					currentRoots.AssemblyLinearVelocity = Vector3.zero
+					currentRoots.AssemblyAngularVelocity = Vector3.zero
 				end
-				
-				if diedConn then diedConn:Disconnect() end
-				
-				if not State.ManualSuspension and State.FarmActive then
-					local killTime = tick()
-					local savedUpPos = nil
-					while getgenv().RayfieldTracker and (tick() - killTime) < Config.SuspensionDuration do
-						if State.ManualSuspension or not State.FarmActive then break end
-						local cChar = LocalPlayer.Character
-						local cHum = GetHumanoid(cChar)
-						local cRoot = GetRootPart(cChar)
-						if not cHum or cHum.Health <= 0 then break end
-						if cRoot then
-							if not savedUpPos then
-								savedUpPos = cRoot.Position + Vector3_new(0, Config.SuspensionHeight, 0)
-							end
-							cRoot.CFrame = CFrame_new(savedUpPos)
-							cRoot.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
-						end
-						RunService.Heartbeat:Wait()
-					end
-				end
-			else
-				task.wait(Config.TickInterval)
+				RunService.Heartbeat:Wait()
 			end
 		else
-			task.wait(Config.TickInterval)
+			task.wait(0.2)
 		end
 	end
 end)
