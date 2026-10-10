@@ -1,0 +1,146 @@
+-- Stop any previously running tracker instances
+if getgenv().TrackerActive then
+	getgenv().TrackerActive = false
+	task.wait(0.1)
+end
+
+getgenv().TrackerActive = true
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+local function getLowestHealthTarget(myRoot)
+	local bestTarget = nil
+	local lowestHealth = math.huge
+	
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer then
+			local char = p.Character
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
+			local root = char and char:FindFirstChild("HumanoidRootPart")
+			if hum and hum.Health > 0 and root then
+				local dist = (root.Position - myRoot.Position).Magnitude
+				if dist <= 1000 and hum.Health < lowestHealth then
+					lowestHealth = hum.Health
+					bestTarget = p
+				end
+			end
+		end
+	end
+	return bestTarget
+end
+
+task.spawn(function()
+	while getgenv().TrackerActive do
+		local character = LocalPlayer.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+		
+		-- Wait for respawn if dead
+		if not character or not humanoid or humanoid.Health <= 0 or not rootPart then
+			task.wait(0.5)
+			continue
+		end
+		
+		-- Void safety check: If below workspace fallen parts destroy height (usually -500), push back up
+		if rootPart.Position.Y < -400 then
+			rootPart.CFrame = CFrame.new(rootPart.Position.X, 100, rootPart.Position.Z)
+			rootPart.AssemblyLinearVelocity = Vector3.zero
+		end
+		
+		local target = getLowestHealthTarget(rootPart)
+		if not target then
+			task.wait(0.2)
+			continue
+		end
+		
+		local targetChar = target.Character
+		local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+		local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
+		
+		if targetRoot and targetHum and targetHum.Health > 0 then
+			character = LocalPlayer.Character
+			humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			rootPart = character and character:FindFirstChild("HumanoidRootPart")
+			
+			if not rootPart or not humanoid or humanoid.Health <= 0 then
+				task.wait(0.2)
+				continue
+			end
+			
+			-- Fast tween to target
+			local distance = (targetRoot.Position - rootPart.Position).Magnitude
+			local speed = 500
+			local duration = math.clamp(distance / speed, 0.05, 0.3)
+			
+			local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
+			local tween = TweenService:Create(rootPart, tweenInfo, {CFrame = targetRoot.CFrame * CFrame.new(0, 3, 0)})
+			tween:Play()
+			
+			local reached = false
+			local conn
+			conn = tween.Completed:Connect(function()
+				reached = true
+				if conn then conn:Disconnect() end
+			end)
+			
+			local startTime = tick()
+			while not reached and (tick() - startTime) < duration + 0.1 do
+				if targetHum.Health <= 0 or not getgenv().TrackerActive then break end
+				local currentHum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+				if currentHum and currentHum.Health <= 0 then break end
+				task.wait()
+			end
+			
+			-- Glue to player until they die
+			local isDead = false
+			local diedConn = targetHum.Died:Connect(function()
+				isDead = true
+			end)
+			
+			while getgenv().TrackerActive and not isDead and targetHum.Health > 0 do
+				local currentChars = LocalPlayer.Character
+				local currentHums = currentChars and currentChars:FindFirstChildOfClass("Humanoid")
+				local currentRoots = currentChars and currentChars:FindFirstChild("HumanoidRootPart")
+				
+				if not currentHums or currentHums.Health <= 0 then break end
+				
+				local tRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+				if tRoot and currentRoots then
+					currentRoots.CFrame = tRoot.CFrame * CFrame.new(0, 3, 0)
+					currentRoots.AssemblyLinearVelocity = Vector3.zero
+				end
+				RunService.Heartbeat:Wait()
+			end
+			
+			if diedConn then diedConn:Disconnect() end
+			
+			-- Target died: Teleport 900 studs up and freeze velocity so you don't fall for 1.5 seconds
+			local killTime = tick()
+			local savedUpPosition = nil
+			
+			while getgenv().TrackerActive and (tick() - killTime) < 1.5 do
+				local currentChars = LocalPlayer.Character
+				local currentHums = currentChars and currentChars:FindFirstChildOfClass("Humanoid")
+				local currentRoots = currentChars and currentChars:FindFirstChild("HumanoidRootPart")
+				
+				if not currentHums or currentHums.Health <= 0 then break end
+				
+				if currentRoots then
+					if not savedUpPosition then
+						savedUpPosition = currentRoots.Position + Vector3.new(0, 900, 0)
+					end
+					-- Lock position high up and zero out physics velocity to prevent gravity pull
+					currentRoots.CFrame = CFrame.new(savedUpPosition)
+					currentRoots.AssemblyLinearVelocity = Vector3.zero
+					currentRoots.AssemblyAngularVelocity = Vector3.zero
+				end
+				RunService.Heartbeat:Wait()
+			end
+		else
+			task.wait(0.2)
+		end
+	end
+end)
