@@ -1,103 +1,345 @@
-if getgenv().TrackerActive then
-	getgenv().TrackerActive = false
+if getgenv().TrackerCoreExpanded then
+	getgenv().TrackerCoreExpanded = false
 	task.wait(0.1)
 end
 
-getgenv().TrackerActive = true
+getgenv().TrackerCoreExpanded = true
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 local CoreGui = game:GetService("CoreGui")
-local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
 local LocalPlayer = Players.LocalPlayer
+
+local Config = {
+	MaxDistance = 1000,
+	SuspensionHeight = 100,
+	SuspensionDuration = 0.5,
+	VoidThreshold = -400,
+	SafeSpawnHeight = 100,
+	TickInterval = 0.2
+}
+
+local State = {
+	ActiveTarget = nil,
+	LastPosition = Vector3.zero,
+	IsSuspended = false,
+	SessionStartTime = tick(),
+	ManualSuspension = false,
+	FarmActive = true
+}
 
 local Whitelist = {}
 
-local CoreTelemetry = {
-	ExecutionCount = 0,
-	LastError = nil,
-	StartTime = tick(),
-	BufferCache = {}
-}
+local math_sqrt = math.sqrt
+local math_huge = math.huge
+local tick = tick
+local Vector3_new = Vector3.new
+local CFrame_new = CFrame.new
+local ipairs = ipairs
 
-local function LogTelemetry(msg)
-	CoreTelemetry.ExecutionCount = CoreTelemetry.ExecutionCount + 1
-	table.insert(CoreTelemetry.BufferCache, {Time = tick(), Message = msg})
-	if #CoreTelemetry.BufferCache > 50 then
-		table.remove(CoreTelemetry.BufferCache, 1)
+local SuccessGui, ScreenGui = pcall(function()
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "TrackerControlGui"
+	gui.ResetOnSpawn = false
+	if syn and syn.protect_gui then
+		syn.protect_gui(gui)
+		gui.Parent = CoreGui
+	elseif gethui then
+		gui.Parent = gethui()
+	else
+		gui.Parent = CoreGui
 	end
+	return gui
+end)
+
+if not SuccessGui or not ScreenGui then
+	ScreenGui = Instance.new("ScreenGui")
+	ScreenGui.Name = "TrackerControlGui"
+	ScreenGui.ResetOnSpawn = false
+	ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
-local PhysicsSafetyUtility = {}
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 320, 0, 290)
+MainFrame.Position = UDim2.new(0, 30, 0, 50)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Parent = ScreenGui
 
-function PhysicsSafetyUtility.VerifyAndSanitizeRoot(rootPart)
-	if not rootPart then return false end
-	pcall(function()
-		if rootPart.Position.Y < -400 then
-			rootPart.CFrame = CFrame.new(rootPart.Position.X, 100, rootPart.Position.Z)
-			rootPart.AssemblyLinearVelocity = Vector3.zero
-			rootPart.AssemblyAngularVelocity = Vector3.zero
-			LogTelemetry("Void")
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 10)
+UICorner.Parent = MainFrame
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, 0, 0, 45)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "Tracker Controller"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 18
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.Parent = MainFrame
+
+local HideButton = Instance.new("TextButton")
+HideButton.Size = UDim2.new(0, 45, 0, 45)
+HideButton.Position = UDim2.new(1, -45, 0, 0)
+HideButton.BackgroundTransparency = 1
+HideButton.Text = "-"
+HideButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+HideButton.TextSize = 22
+HideButton.Font = Enum.Font.GothamBold
+HideButton.Parent = MainFrame
+
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(0, 280, 0, 45)
+ToggleButton.Position = UDim2.new(0, 20, 0, 55)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.Text = "Air Suspension: OFF (not working dont use this)"
+ToggleButton.TextSize = 16
+ToggleButton.Font = Enum.Font.GothamMedium
+ToggleButton.Parent = MainFrame
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 8)
+ToggleCorner.Parent = ToggleButton
+
+local FarmButton = Instance.new("TextButton")
+FarmButton.Size = UDim2.new(0, 280, 0, 45)
+FarmButton.Position = UDim2.new(0, 20, 0, 110)
+FarmButton.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
+FarmButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+FarmButton.Text = "Farm / Teleport: ON"
+FarmButton.TextSize = 16
+FarmButton.Font = Enum.Font.GothamMedium
+FarmButton.Parent = MainFrame
+
+local FarmCorner = Instance.new("UICorner")
+FarmCorner.CornerRadius = UDim.new(0, 8)
+FarmCorner.Parent = FarmButton
+
+local UsernameBox = Instance.new("TextBox")
+UsernameBox.Size = UDim2.new(0, 280, 0, 45)
+UsernameBox.Position = UDim2.new(0, 20, 0, 165)
+UsernameBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+UsernameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+UsernameBox.PlaceholderText = "Enter Username"
+UsernameBox.Text = ""
+UsernameBox.TextSize = 16
+UsernameBox.Font = Enum.Font.Gotham
+UsernameBox.Parent = MainFrame
+
+local BoxCorner = Instance.new("UICorner")
+BoxCorner.CornerRadius = UDim.new(0, 8)
+BoxCorner.Parent = UsernameBox
+
+local WhitelistButton = Instance.new("TextButton")
+WhitelistButton.Size = UDim2.new(0, 280, 0, 45)
+WhitelistButton.Position = UDim2.new(0, 20, 0, 220)
+WhitelistButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+WhitelistButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+WhitelistButton.Text = "Whitelist Player"
+WhitelistButton.TextSize = 16
+WhitelistButton.Font = Enum.Font.GothamMedium
+WhitelistButton.Parent = MainFrame
+
+local WhitelistCorner = Instance.new("UICorner")
+WhitelistCorner.CornerRadius = UDim.new(0, 8)
+WhitelistCorner.Parent = WhitelistButton
+
+local dragging, dragInput, dragStart, startPos
+TitleLabel.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = MainFrame.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+TitleLabel.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		dragInput = input
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		local delta = input.Position - dragStart
+		MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+end)
+
+local guiVisible = true
+HideButton.MouseButton1Click:Connect(function()
+	guiVisible = not guiVisible
+	for _, child in ipairs(MainFrame:GetChildren()) do
+		if child ~= TitleLabel and child ~= HideButton and child ~= UICorner then
+			child.Visible = guiVisible
 		end
-	end)
-	return true
-end
-
-function PhysicsSafetyUtility.StabilizePlayerMotion(rootPart)
-	if not rootPart then return end
-	pcall(function()
-		rootPart.AssemblyLinearVelocity = Vector3.zero
-		rootPart.AssemblyAngularVelocity = Vector3.zero
-	end)
-end
-
-local ValidationEngine = {}
-
-function ValidationEngine.VerifyHumanoidAlive(humanoid)
-	if not humanoid then return false end
-	return humanoid.Health > 0
-end
-
-function ValidationEngine.VerifyCharacterUsable(character)
-	if not character then return false end
-	local hum = character:FindFirstChildOfClass("Humanoid")
-	local root = character:FindFirstChild("HumanoidRootPart")
-	if not hum or not root or hum.Health <= 0 then
-		return false
 	end
-	return true, hum, root
-end
+	if guiVisible then
+		MainFrame.Size = UDim2.new(0, 320, 0, 290)
+		HideButton.Text = "-"
+	else
+		MainFrame.Size = UDim2.new(0, 320, 0, 45)
+		HideButton.Text = "+"
+	end
+end)
 
-function ValidationEngine.IsPlayerWhitelisted(player)
-	if not player then return false end
-	return Whitelist[player.Name] or Whitelist[player.DisplayName]
-end
+ToggleButton.MouseButton1Click:Connect(function()
+	State.ManualSuspension = not State.ManualSuspension
+	if State.ManualSuspension then
+		ToggleButton.Text = "Air Suspension: ON"
+		ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
+	else
+		ToggleButton.Text = "Air Suspension: OFF"
+		ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	end
+end)
 
-local TargetAnalyzer = {}
+FarmButton.MouseButton1Click:Connect(function()
+	State.FarmActive = not State.FarmActive
+	if State.FarmActive then
+		FarmButton.Text = "Farm / Teleport: ON"
+		FarmButton.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
+	else
+		FarmButton.Text = "Farm / Teleport: OFF"
+		FarmButton.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
+	end
+end)
 
-function TargetAnalyzer.EvaluateDistance(pos1, pos2)
+WhitelistButton.MouseButton1Click:Connect(function()
+	local text = UsernameBox.Text
+	if text ~= "" then
+		Whitelist[text] = true
+		UsernameBox.Text = ""
+	end
+end)
+
+local MathModule = {}
+
+function MathModule.GetDistanceSquared(pos1, pos2)
 	local dx = pos1.X - pos2.X
 	local dy = pos1.Y - pos2.Y
 	local dz = pos1.Z - pos2.Z
 	return (dx * dx) + (dy * dy) + (dz * dz)
 end
 
-function TargetAnalyzer.FindOptimalTarget(rootPos)
+function MathModule.FastMagnitude(pos1, pos2)
+	return math_sqrt(MathModule.GetDistanceSquared(pos1, pos2))
+end
+
+function MathModule.DummyFunctionA()
+	local x = 1
+	for i = 1, 10 do
+		x = x + i
+	end
+	return x
+end
+
+function MathModule.DummyFunctionB()
+	local y = 2
+	for i = 1, 5 do
+		y = y * i
+	end
+	return y
+end
+
+function MathModule.DummyFunctionC()
+	local z = Vector3_new(0, 0, 0)
+	return z
+end
+
+function MathModule.DummyFunctionD()
+	local t = tick()
+	return t
+end
+
+local ValidationModule = {}
+
+function ValidationModule.GetHumanoid(character)
+	if not character then return nil end
+	return character:FindFirstChildOfClass("Humanoid")
+end
+
+function ValidationModule.GetRootPart(character)
+	if not character then return nil end
+	return character:FindFirstChild("HumanoidRootPart")
+end
+
+function ValidationModule.IsCharacterUsable(character)
+	if not character then return false end
+	local humanoid = ValidationModule.GetHumanoid(character)
+	local rootPart = ValidationModule.GetRootPart(character)
+	if not humanoid or not rootPart then return false end
+	if humanoid.Health <= 0 then return false end
+	return true, humanoid, rootPart
+end
+
+function ValidationModule.IsPlayerValid(player)
+	if not player or player == LocalPlayer then return false end
+	if Whitelist[player.Name] or Whitelist[player.DisplayName] then return false end
+	local character = player.Character
+	if not character then return false end
+	local isValid, hum, root = ValidationModule.IsCharacterUsable(character)
+	if not isValid then return false end
+	return true, character, hum, root
+end
+
+function ValidationModule.GetLocalCharacterState()
+	local char = LocalPlayer.Character
+	if not char then return nil, nil, nil end
+	local hum = ValidationModule.GetHumanoid(char)
+	local root = ValidationModule.GetRootPart(char)
+	return char, hum, root
+end
+
+function ValidationModule.EnsureSafeLocalState()
+	local char, hum, root = ValidationModule.GetLocalCharacterState()
+	if not char or not hum or not root then return false end
+	if hum.Health <= 0 then return false end
+	return true, char, hum, root
+end
+
+function ValidationModule.DummyValidationA()
+	return true
+end
+
+function ValidationModule.DummyValidationB()
+	return false
+end
+
+function ValidationModule.DummyValidationC()
+	return nil
+end
+
+function ValidationModule.DummyValidationD()
+	return LocalPlayer ~= nil
+end
+
+local TargetModule = {}
+
+function TargetModule.FindOptimalTarget(myRootPos)
 	local bestTarget = nil
-	local lowestHealth = math.huge
-	local maxDistSq = 1000 * 1000
+	local lowestHealth = math_huge
+	local maxDistSq = Config.MaxDistance * Config.MaxDistance
 	
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p ~= LocalPlayer and not ValidationEngine.IsPlayerWhitelisted(p) then
-			local char = p.Character
-			local isValid, hum, root = ValidationEngine.VerifyCharacterUsable(char)
-			if isValid then
-				local distSq = TargetAnalyzer.EvaluateDistance(root.Position, rootPos)
-				if distSq <= maxDistSq then
-					if hum.Health < lowestHealth then
-						lowestHealth = hum.Health
-						bestTarget = p
-					end
+	for _, player in ipairs(Players:GetPlayers()) do
+		local isValid, char, hum, root = ValidationModule.IsPlayerValid(player)
+		if isValid then
+			local distSq = MathModule.GetDistanceSquared(root.Position, myRootPos)
+			if distSq <= maxDistSq then
+				if hum.Health < lowestHealth then
+					lowestHealth = hum.Health
+					bestTarget = player
 				end
 			end
 		end
@@ -106,474 +348,215 @@ function TargetAnalyzer.FindOptimalTarget(rootPos)
 	return bestTarget
 end
 
-local EngineBoostModule1 = {}
-function EngineBoostModule1.PreComputeVectorForce(root, targetPos)
-	if not root then return end
-	local direction = (targetPos - root.Position).Unit
-	return direction * math.clamp((targetPos - root.Position).Magnitude * 2, 10, 100)
+function TargetModule.DummyTargetA()
+	return nil
 end
 
-local EngineBoostModule2 = {}
-function EngineBoostModule2.OptimizeNetworkSend()
-	if setscriptable then
-		pcall(function() setscriptable(LocalPlayer, "SimulationRadius", true) end)
-	end
-	pcall(function()
-		LocalPlayer.SimulationRadius = math.huge
-		LocalPlayer.MaxSimulationRadius = math.huge
-	end)
+function TargetModule.DummyTargetB()
+	return 0
 end
 
-local EngineBoostModule3 = {}
-function EngineBoostModule3.FastRaycastCheck(pos1, pos2)
-	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Exclude
-	params.IgnoreWater = true
-	local result = workspace:Raycast(pos1, pos2 - pos1, params)
-	return result == nil
+function TargetModule.DummyTargetC()
+	return {}
 end
 
-local EngineBoostModule4 = {}
-function EngineBoostModule4.PurgeMemoryCache()
-	if clear_nsc_cache then pcall(clear_nsc_cache) end
-	if collectgarbage then pcall(collectgarbage, "collect") end
+function TargetModule.DummyTargetD()
+	return true
 end
 
-local EngineBoostModule5 = {}
-function EngineBoostModule5.EnsureCollisionState(char)
-	for _, part in ipairs(char:GetDescendants()) do
-		if part:IsA("BasePart") then
-			part.CanCollide = false
-		end
+local PhysicsModule = {}
+
+function PhysicsModule.VerifyVoidBoundary(rootPart)
+	if not rootPart then return end
+	if rootPart.Position.Y < Config.VoidThreshold then
+		rootPart.CFrame = CFrame_new(rootPart.Position.X, Config.SafeSpawnHeight, rootPart.Position.Z)
+		PhysicsModule.StabilizeVelocity(rootPart)
 	end
 end
 
-local EngineBoostModule6 = {}
-function EngineBoostModule6.PredictTargetPosition(targetRoot, velocity)
-	if not targetRoot then return Vector3.zero end
-	return targetRoot.Position + (velocity * 0.05)
+function PhysicsModule.StabilizeVelocity(rootPart)
+	if not rootPart then return end
+	rootPart.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
+	rootPart.AssemblyAngularVelocity = Vector3_new(0, 0, 0)
 end
 
-local EngineBoostModule7 = {}
-function EngineBoostModule7.CachePlayerInstances()
-	local activeTable = {}
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p ~= LocalPlayer then
-			table.insert(activeTable, p)
-		end
-	end
-	return activeTable
+function PhysicsModule.DummyPhysicsA()
+	return true
 end
 
-local EngineBoostModule8 = {}
-function EngineBoostModule8.VerifyEnvironmentIntegrity()
-	return workspace.CurrentCamera ~= nil
-end
-
-local EngineBoostModule9 = {}
-function EngineBoostModule9.BoostHeartbeatFrequency()
-	RunService.Stepped:Wait()
-end
-
-local EngineBoostModule10 = {}
-function EngineBoostModule10.CalculateAdaptiveSleep(dist)
-	if dist > 500 then return 0.05 else return 0.01 end
-end
-
-local EngineFixModule1 = {}
-function EngineFixModule1.RepairNullCharacter(player)
-	if not player.Character then return false end
-	return player.Character:FindFirstChild("HumanoidRootPart") ~= nil
-end
-
-local EngineFixModule2 = {}
-function EngineFixModule2.ValidateHumanoidState(hum)
-	if not hum then return false end
-	return hum:GetState() ~= Enum.HumanoidStateType.Dead
-end
-
-local EngineFixModule3 = {}
-function EngineFixModule3.HandleRespawnDesync(char)
-	if char and not char:FindFirstChild("HumanoidRootPart") then
-		task.wait(0.1)
-	end
-end
-
-local EngineFixModule4 = {}
-function EngineFixModule4.SanitizeVectorCoords(vec)
-	if not vec then return Vector3.zero end
-	return Vector3.new(math.clamp(vec.X, -100000, 100000), math.clamp(vec.Y, -100000, 100000), math.clamp(vec.Z, -100000, 100000))
-end
-
-local EngineFixModule5 = {}
-function EngineFixModule5.PreventPhysicsLockup(root)
-	if root and root.AssemblyLinearVelocity.Magnitude > 500 then
-		root.AssemblyLinearVelocity = Vector3.zero
-	end
-end
-
-local EngineFixModule6 = {}
-function EngineFixModule6.ResolveTargetMismatch(target)
-	if target and not target.Character then return nil end
-	return target
-end
-
-local EngineFixModule7 = {}
-function EngineFixModule7.CatchErrorState(success, err)
-	if not success then
-		LogTelemetry("FixErr: " .. tostring(err))
-	end
-end
-
-local EngineFixModule8 = {}
-function EngineFixModule8.VerifyConnectionIntegrity(conn)
-	if conn and typeof(conn) == "RBXScriptConnection" then
-		return conn.Connected
-	end
+function PhysicsModule.DummyPhysicsB()
 	return false
 end
 
-local EngineFixModule9 = {}
-function EngineFixModule9.ForceStateReplication()
-	pcall(function()
-		LocalPlayer:RequestStreamAroundAsync(LocalPlayer.Character.PrimaryPart.Position)
-	end)
+function PhysicsModule.DummyPhysicsC()
+	return nil
 end
 
-local EngineFixModule10 = {}
-function EngineFixModule10.SynchronizeTimestamps()
-	return tick()
+function PhysicsModule.DummyPhysicsD()
+	return 0
 end
 
-local ButtonBoostModule1 = {}
-function ButtonBoostModule1.PreloadSuspensionUIState()
-	EngineBoostModule2.OptimizeNetworkSend()
-	EngineBoostModule4.PurgeMemoryCache()
+local MovementModule = {}
+
+function MovementModule.ExecuteInstantTeleport(rootPart, targetRoot)
+	if not rootPart or not targetRoot then return end
+	rootPart.CFrame = targetRoot.CFrame * CFrame_new(0, 3, 0)
+	PhysicsModule.StabilizeVelocity(rootPart)
 end
 
-local ButtonBoostModule2 = {}
-function ButtonBoostModule2.PreloadFarmUIState()
-	EngineBoostModule2.OptimizeNetworkSend()
-	EngineBoostModule7.CachePlayerInstances()
+function MovementModule.DummyMovementA()
+	return true
 end
 
-local ButtonBoostModule3 = {}
-function ButtonBoostModule3.PreloadWhitelistUIState(inputName)
-	if type(inputName) == "string" and #inputName > 0 then
-		return inputName:gsub("^%s+", ""):gsub("%s+$", "")
+function MovementModule.DummyMovementB()
+	return false
+end
+
+function MovementModule.DummyMovementC()
+	return nil
+end
+
+function MovementModule.DummyMovementD()
+	return 0
+end
+
+local SuspensionModule = {}
+
+function SuspensionModule.ExecuteSuspensionSequence()
+	local killTime = tick()
+	local fixedSuspPos = nil
+	
+	while getgenv().TrackerCoreExpanded and (tick() - killTime) < Config.SuspensionDuration do
+		if State.ManualSuspension or not State.FarmActive then break end
+		local char, hum, root = ValidationModule.GetLocalCharacterState()
+		
+		if not hum or hum.Health <= 0 then break end
+		
+		if root then
+			if not fixedSuspPos then
+				fixedSuspPos = root.Position + Vector3_new(0, Config.SuspensionHeight, 0)
+			end
+			root.CFrame = CFrame_new(fixedSuspPos)
+			PhysicsModule.StabilizeVelocity(root)
+		end
+		
+		RunService.Heartbeat:Wait()
 	end
-	return ""
 end
 
-local ButtonBoostModule4 = {}
-function ButtonBoostModule4.TriggerImmediateStatusFeedback(label, text, color)
-	if label then
-		pcall(function()
-			label:Set(text)
-		end)
-	end
+function SuspensionModule.DummySuspensionA()
+	return true
 end
 
-local ButtonBoostModule5 = {}
-function ButtonBoostModule5.ValidateInputString(str)
-	return type(str) == "string" and str ~= ""
+function SuspensionModule.DummySuspensionB()
+	return false
 end
 
-local ButtonBoostModule6 = {}
-function ButtonBoostModule6.ExecuteButtonTask(callback)
+function SuspensionModule.DummySuspensionC()
+	return nil
+end
+
+function SuspensionModule.DummySuspensionD()
+	return 0
+end
+
+local LoopController = {}
+
+function LoopController.InitializeMainLoop()
 	task.spawn(function()
-		pcall(callback)
-	end)
-end
-
-local ButtonBoostModule7 = {}
-function ButtonBoostModule7.FlushButtonBuffer()
-	task.wait(0.03)
-end
-
-local ButtonBoostModule8 = {}
-function ButtonBoostModule8.ConfirmButtonState(val)
-	return val == true or val == false
-end
-
-local ButtonBoostModule9 = {}
-function ButtonBoostModule9.RegisterButtonEventHook(name)
-	return name ~= nil
-end
-
-local ButtonBoostModule10 = {}
-function ButtonBoostModule10.OptimizeButtonMemory()
-	if collectgarbage then pcall(collectgarbage, "step", 10) end
-end
-
-local ButtonFixModule1 = {}
-function ButtonFixModule1.ResolveSuspensionToggleBug(val)
-	return val == true or val == false
-end
-
-local ButtonFixModule2 = {}
-function ButtonFixModule2.VerifyFarmLoopToggleBug(val)
-	return val == true or val == false
-end
-
-local ButtonFixModule3 = {}
-function ButtonFixModule3.SanitizeWhitelistInput(input)
-	if not input then return "" end
-	return tostring(input):gsub("[^%w_]", "")
-end
-
-local ButtonFixModule4 = {}
-function ButtonFixModule4.PreventDuplicateWhitelist(tbl, name)
-	if tbl[name] then return true end
-	return false
-end
-
-local ButtonFixModule5 = {}
-function ButtonFixModule5.EnsureLabelObjectValid(label)
-	return label ~= nil
-end
-
-local ButtonFixModule6 = {}
-function ButtonFixModule6.HandleNilButtonCallback(cb)
-	if type(cb) ~= "function" then return function() end end
-	return cb
-end
-
-local ButtonFixModule7 = {}
-function ButtonFixModule7.SyncButtonStateWithGlobal(stateVal)
-	return stateVal
-end
-
-local ButtonFixModule8 = {}
-function ButtonFixModule8.CatchButtonExecutionError(success, err)
-	if not success then
-		LogTelemetry("BtnFixErr: " .. tostring(err))
-	end
-end
-
-local ButtonFixModule9 = {}
-function ButtonFixModule9.VerifyButtonUIInstance(window)
-	return window ~= nil
-end
-
-local ButtonFixModule10 = {}
-function ButtonFixModule10.ResetButtonStateOnDeath(char)
-	if char then
-		local hum = char:FindFirstChildOfClass("Humanoid")
-		if hum and hum.Health <= 0 then
-			return true
-		end
-	end
-	return false
-end
-
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-
-local Window = Rayfield:CreateWindow({
-	Name = "Tracker",
-	LoadingTitle = "Loading",
-	LoadingSubtitle = "by tengo_yo",
-	ConfigurationSaving = { Enabled = false },
-	KeySystem = false
-})
-
-local MainTab = Window:CreateTab("Main", 4483362458)
-local StatusLabel = MainTab:CreateLabel("Status: Running")
-
-local SuspensionActive = false
-MainTab:CreateToggle({
-	Name = "Air Suspension",
-	CurrentValue = false,
-	Callback = function(Value)
-		SuspensionActive = Value
-		ButtonFixModule8.CatchButtonExecutionError(pcall(function()
-			ButtonFixModule1.ResolveSuspensionToggleBug(Value)
-			ButtonFixModule5.EnsureLabelObjectValid(StatusLabel)
-		end))
-		ButtonBoostModule1.PreloadSuspensionUIState()
-		ButtonBoostModule6.ExecuteButtonTask(function()
-			if Value then
-				ButtonBoostModule4.TriggerImmediateStatusFeedback(StatusLabel, "Status: Suspended")
-				LogTelemetry("Suspension ON")
-				task.spawn(function()
-					while SuspensionActive and getgenv().TrackerActive do
-						EngineBoostModule9.BoostHeartbeatFrequency()
-						local char = LocalPlayer.Character
-						EngineFixModule3.HandleRespawnDesync(char)
-						local isValid, hum, root = ValidationEngine.VerifyCharacterUsable(char)
-						if isValid and EngineFixModule2.ValidateHumanoidState(hum) then
-							PhysicsSafetyUtility.VerifyAndSanitizeRoot(root)
-							EngineFixModule5.PreventPhysicsLockup(root)
-							root.CFrame = EngineFixModule4.SanitizeVectorCoords(root.CFrame + Vector3.new(0, 100, 0))
-							PhysicsSafetyUtility.StabilizePlayerMotion(root)
-						end
-					end
-				end)
-			else
-				ButtonBoostModule4.TriggerImmediateStatusFeedback(StatusLabel, "Status: Running")
-				LogTelemetry("Suspension OFF")
+		local manualSavedPos = nil
+		while getgenv().TrackerCoreExpanded do
+			local char, hum, root = ValidationModule.GetLocalCharacterState()
+			
+			if not char or not hum or hum.Health <= 0 or not root then
+				manualSavedPos = nil
+				task.wait(Config.TickInterval)
+				continue
 			end
-		end)
-	end,
-})
-
-local FarmActive = true
-MainTab:CreateToggle({
-	Name = "Farm Loop",
-	CurrentValue = true,
-	Callback = function(Value)
-		FarmActive = Value
-		ButtonFixModule8.CatchButtonExecutionError(pcall(function()
-			ButtonFixModule2.VerifyFarmLoopToggleBug(Value)
-			ButtonFixModule5.EnsureLabelObjectValid(StatusLabel)
-		end))
-		ButtonBoostModule2.PreloadFarmUIState()
-		ButtonBoostModule6.ExecuteButtonTask(function()
-			if Value then
-				ButtonBoostModule4.TriggerImmediateStatusFeedback(StatusLabel, "Status: Running")
-				LogTelemetry("Farm ON")
-				task.spawn(function()
-					while FarmActive and getgenv().TrackerActive do
-						EngineBoostModule4.PurgeMemoryCache()
-						local character = LocalPlayer.Character
-						EngineFixModule3.HandleRespawnDesync(character)
-						local isValid, humanoid, rootPart = ValidationEngine.VerifyCharacterUsable(character)
-						
-						if not isValid or not EngineFixModule1.RepairNullCharacter(LocalPlayer) then
-							task.wait(0.5)
-							continue
-						end
-						
-						PhysicsSafetyUtility.VerifyAndSanitizeRoot(rootPart)
-						EngineFixModule5.PreventPhysicsLockup(rootPart)
-						
-						local target = TargetAnalyzer.FindOptimalTarget(rootPart.Position)
-						target = EngineFixModule6.ResolveTargetMismatch(target)
-						if not target then
-							task.wait(0.2)
-							continue
-						end
-						
-						local targetChar = target.Character
-						local tValid, targetHum, targetRoot = ValidationEngine.VerifyCharacterUsable(targetChar)
-						
-						if tValid and EngineFixModule2.ValidateHumanoidState(targetHum) then
-							character = LocalPlayer.Character
-							local cValid, cHum, cRoot = ValidationEngine.VerifyCharacterUsable(character)
-							
-							if not cValid then
-								task.wait(0.2)
-								continue
-							end
-							
-							EngineBoostModule5.EnsureCollisionState(character)
-							cRoot.CFrame = EngineFixModule4.SanitizeVectorCoords(targetRoot.CFrame * CFrame.new(0, 3, 0))
-							PhysicsSafetyUtility.StabilizePlayerMotion(cRoot)
-							
-							local isDead = false
-							local diedConn = targetHum.Died:Connect(function()
-								isDead = true
-							end)
-							
-							while FarmActive and getgenv().TrackerActive and not isDead and targetHum.Health > 0 do
-								RunService.Heartbeat:Wait()
-								local curChar = LocalPlayer.Character
-								local curValid, curHum, curRoot = ValidationEngine.VerifyCharacterUsable(curChar)
-								
-								if not curValid or ButtonFixModule10.ResetButtonStateOnDeath(curChar) then break end
-								
-								local tRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-								if tRoot and curRoot then
-									curRoot.CFrame = EngineFixModule4.SanitizeVectorCoords(tRoot.CFrame * CFrame.new(0, 3, 0))
-									PhysicsSafetyUtility.StabilizePlayerMotion(curRoot)
-								end
-							end
-							
-							if EngineFixModule8.VerifyConnectionIntegrity(diedConn) then
-								diedConn:Disconnect()
-							end
-							
-							local killTime = tick()
-							EngineFixModule10.SynchronizeTimestamps()
-							local savedUpPosition = nil
-							
-							while FarmActive and getgenv().TrackerActive and (tick() - killTime) < 1.5 do
-								RunService.Heartbeat:Wait()
-								local curChar = LocalPlayer.Character
-								local curValid, curHum, curRoot = ValidationEngine.VerifyCharacterUsable(curChar)
-								
-								if not curValid then break end
-								
-								if curRoot then
-									if not savedUpPosition then
-										savedUpPosition = curRoot.Position + Vector3.new(0, 900, 0)
-									end
-									curRoot.CFrame = EngineFixModule4.SanitizeVectorCoords(CFrame.new(savedUpPosition))
-									PhysicsSafetyUtility.StabilizePlayerMotion(curRoot)
-								end
-							end
-						else
-							task.wait(0.2)
-						end
-					end
-				end)
-			else
-				ButtonBoostModule4.TriggerImmediateStatusFeedback(StatusLabel, "Status: Stopped")
-				LogTelemetry("Farm OFF")
+			
+			if not State.FarmActive then
+				manualSavedPos = nil
+				task.wait(Config.TickInterval)
+				continue
 			end
-		end)
-	end,
-})
-
-local TargetInput = ""
-MainTab:CreateInput({
-	Name = "Whitelist Username",
-	PlaceholderText = "Username",
-	RemoveTextAfterFocusLost = false,
-	Callback = function(Text)
-		TargetInput = ButtonFixModule3.SanitizeWhitelistInput(Text)
-	end,
-})
-
-MainTab:CreateButton({
-	Name = "Add Whitelist",
-	Callback = function()
-		ButtonFixModule8.CatchButtonExecutionError(pcall(function()
-			ButtonFixModule5.EnsureLabelObjectValid(StatusLabel)
-		end))
-		ButtonBoostModule6.ExecuteButtonTask(function()
-			ButtonBoostModule7.FlushButtonBuffer()
-			local sanitizedName = ButtonFixModule3.SanitizeWhitelistInput(TargetInput)
-			if ButtonBoostModule5.ValidateInputString(sanitizedName) and not ButtonFixModule4.PreventDuplicateWhitelist(Whitelist, sanitizedName) then
-				Whitelist[sanitizedName] = true
-				ButtonBoostModule4.TriggerImmediateStatusFeedback(StatusLabel, "Whitelisted: " .. sanitizedName)
-				LogTelemetry("Whitelist: " .. sanitizedName)
-				task.delay(2, function()
-					ButtonBoostModule4.TriggerImmediateStatusFeedback(StatusLabel, "Status: Running")
-				end)
-				ButtonBoostModule10.OptimizeButtonMemory()
-			end
-		end)
-	end,
-})
-
-local DiagnosticDaemon = {}
-
-function DiagnosticDaemon.RunHealthCheck()
-	task.spawn(function()
-		while getgenv().TrackerActive do
-			pcall(function()
-				local char = LocalPlayer.Character
-				if char then
-					local hum = char:FindFirstChildOfClass("Humanoid")
-					if hum and hum.Health <= 0 then
-						LogTelemetry("Dead")
-					end
+			
+			if State.ManualSuspension then
+				if not manualSavedPos then
+					manualSavedPos = root.Position + Vector3_new(0, Config.SuspensionHeight, 0)
 				end
-			end)
-			task.wait(5)
+				root.CFrame = CFrame_new(manualSavedPos)
+				PhysicsModule.StabilizeVelocity(root)
+				RunService.Heartbeat:Wait()
+				continue
+			else
+				manualSavedPos = nil
+			end
+			
+			PhysicsModule.VerifyVoidBoundary(root)
+			
+			local targetPlayer = TargetModule.FindOptimalTarget(root.Position)
+			if not targetPlayer then
+				task.wait(Config.TickInterval)
+				continue
+			end
+			
+			local tValid, tChar, tHum, tRoot = ValidationModule.IsPlayerValid(targetPlayer)
+			if tValid then
+				local currentValid, curChar, curHum, curRoot = ValidationModule.EnsureSafeLocalState()
+				if not currentValid then
+					task.wait(Config.TickInterval)
+					continue
+				end
+				
+				MovementModule.ExecuteInstantTeleport(curRoot, tRoot)
+				
+				local targetIsDead = false
+				local deathConnection = tHum.Died:Connect(function()
+					targetIsDead = true
+				end)
+				
+				while getgenv().TrackerCoreExpanded and not targetIsDead and tHum.Health > 0 do
+					if State.ManualSuspension or not State.FarmActive then break end
+					local loopChar, loopHum, loopRoot = ValidationModule.GetLocalCharacterState()
+					if not loopHum or loopHum.Health <= 0 then break end
+					
+					local currentTargetRoot = ValidationModule.GetRootPart(targetPlayer.Character)
+					if currentTargetRoot and loopRoot then
+						loopRoot.CFrame = currentTargetRoot.CFrame * CFrame_new(0, 3, 0)
+						PhysicsModule.StabilizeVelocity(loopRoot)
+					end
+					
+					RunService.Heartbeat:Wait()
+				end
+				
+				if deathConnection then
+					deathConnection:Disconnect()
+				end
+				
+				if not State.ManualSuspension and State.FarmActive then
+					SuspensionModule.ExecuteSuspensionSequence()
+				end
+			else
+				task.wait(Config.TickInterval)
+			end
 		end
 	end)
 end
 
-DiagnosticDaemon.RunHealthCheck()
+function LoopController.DummyLoopA()
+	return true
+end
+
+function LoopController.DummyLoopB()
+	return false
+end
+
+function LoopController.DummyLoopC()
+	return nil
+end
+
+function LoopController.DummyLoopD()
+	return 0
+end
+
+LoopController.InitializeMainLoop()
