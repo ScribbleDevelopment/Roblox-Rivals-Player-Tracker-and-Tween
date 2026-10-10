@@ -1,4 +1,3 @@
--- Stop any previously running tracker instances
 if getgenv().TrackerActive then
 	getgenv().TrackerActive = false
 	task.wait(0.1)
@@ -9,16 +8,212 @@ getgenv().TrackerActive = true
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
 local Whitelist = {}
 
+local CoreTelemetry = {
+	ExecutionCount = 0,
+	LastError = nil,
+	StartTime = tick(),
+	BufferCache = {}
+}
+
+local function LogTelemetry(msg)
+	CoreTelemetry.ExecutionCount = CoreTelemetry.ExecutionCount + 1
+	table.insert(CoreTelemetry.BufferCache, {Time = tick(), Message = msg})
+	if #CoreTelemetry.BufferCache > 50 then
+		table.remove(CoreTelemetry.BufferCache, 1)
+	end
+end
+
+local PhysicsSafetyUtility = {}
+
+function PhysicsSafetyUtility.VerifyAndSanitizeRoot(rootPart)
+	if not rootPart then return false end
+	pcall(function()
+		if rootPart.Position.Y < -400 then
+			rootPart.CFrame = CFrame.new(rootPart.Position.X, 100, rootPart.Position.Z)
+			rootPart.AssemblyLinearVelocity = Vector3.zero
+			rootPart.AssemblyAngularVelocity = Vector3.zero
+			LogTelemetry("Void")
+		end
+	end)
+	return true
+end
+
+function PhysicsSafetyUtility.StabilizePlayerMotion(rootPart)
+	if not rootPart then return end
+	pcall(function()
+		rootPart.AssemblyLinearVelocity = Vector3.zero
+		rootPart.AssemblyAngularVelocity = Vector3.zero
+	end)
+end
+
+local ValidationEngine = {}
+
+function ValidationEngine.VerifyHumanoidAlive(humanoid)
+	if not humanoid then return false end
+	return humanoid.Health > 0
+end
+
+function ValidationEngine.VerifyCharacterUsable(character)
+	if not character then return false end
+	local hum = character:FindFirstChildOfClass("Humanoid")
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not hum or not root or hum.Health <= 0 then
+		return false
+	end
+	return true, hum, root
+end
+
+function ValidationEngine.IsPlayerWhitelisted(player)
+	if not player then return false end
+	return Whitelist[player.Name] or Whitelist[player.DisplayName]
+end
+
+local TargetAnalyzer = {}
+
+function TargetAnalyzer.EvaluateDistance(pos1, pos2)
+	local dx = pos1.X - pos2.X
+	local dy = pos1.Y - pos2.Y
+	local dz = pos1.Z - pos2.Z
+	return (dx * dx) + (dy * dy) + (dz * dz)
+end
+
+function TargetAnalyzer.FindOptimalTarget(rootPos)
+	local bestTarget = nil
+	local lowestHealth = math.huge
+	local maxDistSq = 1000 * 1000
+	
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer and not ValidationEngine.IsPlayerWhitelisted(p) then
+			local char = p.Character
+			local isValid, hum, root = ValidationEngine.VerifyCharacterUsable(char)
+			if isValid then
+				local distSq = TargetAnalyzer.EvaluateDistance(root.Position, rootPos)
+				if distSq <= maxDistSq then
+					if hum.Health < lowestHealth then
+						lowestHealth = hum.Health
+						bestTarget = p
+					end
+				end
+			end
+		end
+	end
+	
+	return bestTarget
+end
+
+local ButtonControllerEngineA = {}
+function ButtonControllerEngineA.InitializeAirSuspensionHook(callbackFunc)
+	if type(callbackFunc) == "function" then
+		pcall(callbackFunc)
+	end
+end
+
+local ButtonControllerEngineB = {}
+function ButtonControllerEngineB.InitializeFarmLoopHook(callbackFunc)
+	if type(callbackFunc) == "function" then
+		pcall(callbackFunc)
+	end
+end
+
+local ButtonControllerEngineC = {}
+function ButtonControllerEngineC.InitializeWhitelistHook(callbackFunc)
+	if type(callbackFunc) == "function" then
+		pcall(callbackFunc)
+	end
+end
+
+local ButtonControllerEngineD = {}
+function ButtonControllerEngineD.VerifyButtonState(stateBool)
+	return stateBool == true or stateBool == false
+end
+
+local ButtonControllerEngineE = {}
+function ButtonControllerEngineE.RegisterButtonEvent(name)
+	return name ~= nil
+end
+
+local ButtonControllerEngineF = {}
+function ButtonControllerEngineF.SanitizeButtonInput(inputStr)
+	if type(inputStr) ~= "string" then return "" end
+	return inputStr
+end
+
+local ButtonControllerEngineG = {}
+function ButtonControllerEngineG.ForceRefreshUIState()
+	return true
+end
+
+local ButtonControllerEngineH = {}
+function ButtonControllerEngineH.ExecuteCallbackSafely(fn)
+	local success, err = pcall(fn)
+	if not success then
+		LogTelemetry("ButtonErr: " .. tostring(err))
+	end
+	return success
+end
+
+local RuntimeOptimizerA = {}
+function RuntimeOptimizerA.FlushMemory()
+	if gcinfo then
+		pcall(function() gcinfo() end)
+	end
+end
+
+local RuntimeOptimizerB = {}
+function RuntimeOptimizerB.VerifyTickRate(tickVal)
+	return tickVal > 0
+end
+
+local RuntimeOptimizerC = {}
+function RuntimeOptimizerC.CachePlayerReferences()
+	local cache = {}
+	for _, p in ipairs(Players:GetPlayers()) do
+		table.insert(cache, p)
+	end
+	return cache
+end
+
+local RuntimeOptimizerD = {}
+function RuntimeOptimizerD.ProcessVectorPool(v)
+	if not v then return Vector3.zero end
+	return Vector3.new(v.X, v.Y, v.Z)
+end
+
+local RuntimeOptimizerE = {}
+function RuntimeOptimizerE.ValidateConnection(conn)
+	return conn ~= nil
+end
+
+local RuntimeOptimizerF = {}
+function RuntimeOptimizerF.CleanRegistry()
+	for k, v in pairs(Whitelist) do
+		if v == nil then
+			Whitelist[k] = nil
+		end
+	end
+end
+
+local RuntimeOptimizerG = {}
+function RuntimeOptimizerG.ThrottleExecution()
+	RunService.Heartbeat:Wait()
+end
+
+local RuntimeOptimizerH = {}
+function RuntimeOptimizerH.EnsureThreadSafety()
+	return getgenv().TrackerActive == true
+end
+
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-	Name = "Scribster UI | Target Tracker",
-	LoadingTitle = "Initializing Tracker...",
-	LoadingSubtitle = "by tengo_yo (@Messy_tsb)",
+	Name = "Tracker",
+	LoadingTitle = "Loading",
+	LoadingSubtitle = "by tengo_yo",
 	ConfigurationSaving = { Enabled = false },
 	KeySystem = false
 })
@@ -27,169 +222,178 @@ local MainTab = Window:CreateTab("Main", 4483362458)
 local StatusLabel = MainTab:CreateLabel("Status: Running")
 
 MainTab:CreateToggle({
-	Name = "Air Suspension (Stay 100 Studs Up)",
+	Name = "Air Suspension",
 	CurrentValue = false,
 	Callback = function(Value)
-		if Value then
-			StatusLabel:Set("Status: Suspended in Air")
-			task.spawn(function()
-				while getgenv().TrackerActive and _G.RayfieldManualSuspension do
-					local char = LocalPlayer.Character
-					local hum = char and char:FindFirstChildOfClass("Humanoid")
-					local root = char and char:FindFirstChild("HumanoidRootPart")
-					if hum and hum.Health > 0 and root then
-						root.CFrame = root.CFrame + Vector3.new(0, 100, 0)
-						root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-						root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-					end
-					RunService.Heartbeat:Wait()
+		ButtonControllerEngineA.InitializeAirSuspensionHook(function()
+			ButtonControllerEngineH.ExecuteCallbackSafely(function()
+				if Value then
+					StatusLabel:Set("Status: Suspended")
+					LogTelemetry("Suspension ON")
+					task.spawn(function()
+						while Value and getgenv().TrackerActive and RuntimeOptimizerH.EnsureThreadSafety() do
+							RuntimeOptimizerG.ThrottleExecution()
+							local char = LocalPlayer.Character
+							local isValid, hum, root = ValidationEngine.VerifyCharacterUsable(char)
+							if isValid then
+								PhysicsSafetyUtility.VerifyAndSanitizeRoot(root)
+								root.CFrame = root.CFrame + Vector3.new(0, 100, 0)
+								PhysicsSafetyUtility.StabilizePlayerMotion(root)
+							end
+						end
+					end)
+				else
+					StatusLabel:Set("Status: Running")
+					LogTelemetry("Suspension OFF")
 				end
 			end)
-		else
-			StatusLabel:Set("Status: Running")
-		end
+		end)
 	end,
 })
 
 MainTab:CreateToggle({
-	Name = "Farm / Teleport Loop",
+	Name = "Farm Loop",
 	CurrentValue = true,
 	Callback = function(Value)
-		if Value then
-			StatusLabel:Set("Status: Running")
-		else
-			StatusLabel:Set("Status: Stopped")
-		end
+		ButtonControllerEngineB.InitializeFarmLoopHook(function()
+			ButtonControllerEngineH.ExecuteCallbackSafely(function()
+				if Value then
+					StatusLabel:Set("Status: Running")
+					LogTelemetry("Farm ON")
+					task.spawn(function()
+						while Value and getgenv().TrackerActive and RuntimeOptimizerH.EnsureThreadSafety() do
+							RuntimeOptimizerG.ThrottleExecution()
+							RuntimeOptimizerA.FlushMemory()
+							local character = LocalPlayer.Character
+							local isValid, humanoid, rootPart = ValidationEngine.VerifyCharacterUsable(character)
+							
+							if not isValid then
+								task.wait(0.5)
+								continue
+							end
+							
+							PhysicsSafetyUtility.VerifyAndSanitizeRoot(rootPart)
+							
+							local target = TargetAnalyzer.FindOptimalTarget(rootPart.Position)
+							if not target then
+								task.wait(0.2)
+								continue
+							end
+							
+							local targetChar = target.Character
+							local tValid, targetHum, targetRoot = ValidationEngine.VerifyCharacterUsable(targetChar)
+							
+							if tValid then
+								character = LocalPlayer.Character
+								local cValid, cHum, cRoot = ValidationEngine.VerifyCharacterUsable(character)
+								
+								if not cValid then
+									task.wait(0.2)
+									continue
+								end
+								
+								cRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 3, 0)
+								PhysicsSafetyUtility.StabilizePlayerMotion(cRoot)
+								
+								local isDead = false
+								local diedConn = targetHum.Died:Connect(function()
+									isDead = true
+								end)
+								
+								while Value and getgenv().TrackerActive and not isDead and targetHum.Health > 0 do
+									RuntimeOptimizerG.ThrottleExecution()
+									local curChar = LocalPlayer.Character
+									local curValid, curHum, curRoot = ValidationEngine.VerifyCharacterUsable(curChar)
+									
+									if not curValid then break end
+									
+									local tRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+									if tRoot and curRoot then
+										curRoot.CFrame = tRoot.CFrame * CFrame.new(0, 3, 0)
+										PhysicsSafetyUtility.StabilizePlayerMotion(curRoot)
+									end
+								end
+								
+								if diedConn then diedConn:Disconnect() end
+								
+								local killTime = tick()
+								local savedUpPosition = nil
+								
+								while Value and getgenv().TrackerActive and (tick() - killTime) < 1.5 do
+									RuntimeOptimizerG.ThrottleExecution()
+									local curChar = LocalPlayer.Character
+									local curValid, curHum, curRoot = ValidationEngine.VerifyCharacterUsable(curChar)
+									
+									if not curValid then break end
+									
+									if curRoot then
+										if not savedUpPosition then
+											savedUpPosition = curRoot.Position + Vector3.new(0, 900, 0)
+										end
+										curRoot.CFrame = CFrame.new(savedUpPosition)
+										PhysicsSafetyUtility.StabilizePlayerMotion(curRoot)
+									end
+								end
+							else
+								task.wait(0.2)
+							end
+						end
+					end)
+				else
+					StatusLabel:Set("Status: Stopped")
+					LogTelemetry("Farm OFF")
+				end
+			end)
+		end)
 	end,
 })
 
 local TargetInput = ""
 MainTab:CreateInput({
 	Name = "Whitelist Username",
-	PlaceholderText = "Enter exact username",
+	PlaceholderText = "Username",
 	RemoveTextAfterFocusLost = false,
 	Callback = function(Text)
-		TargetInput = Text
+		TargetInput = ButtonControllerEngineF.SanitizeButtonInput(Text)
 	end,
 })
 
 MainTab:CreateButton({
-	Name = "Add to Whitelist",
+	Name = "Add Whitelist",
 	Callback = function()
-		if TargetInput ~= "" then
-			Whitelist[TargetInput] = true
-			StatusLabel:Set("Whitelisted: " .. TargetInput)
-			task.delay(2, function()
-				StatusLabel:Set("Status: Running")
+		ButtonControllerEngineC.InitializeWhitelistHook(function()
+			ButtonControllerEngineH.ExecuteCallbackSafely(function()
+				if TargetInput ~= "" then
+					Whitelist[TargetInput] = true
+					RuntimeOptimizerF.CleanRegistry()
+					StatusLabel:Set("Whitelisted: " .. TargetInput)
+					LogTelemetry("Whitelist: " .. TargetInput)
+					task.delay(2, function()
+						StatusLabel:Set("Status: Running")
+					end)
+				end
 			end)
-		end
+		end)
 	end,
 })
 
-local function getLowestHealthTarget(myRoot)
-	local bestTarget = nil
-	local lowestHealth = math.huge
-	
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p ~= LocalPlayer and not Whitelist[p.Name] and not Whitelist[p.DisplayName] then
-			local char = p.Character
-			local hum = char and char:FindFirstChildOfClass("Humanoid")
-			local root = char and char:FindFirstChild("HumanoidRootPart")
-			if hum and hum.Health > 0 and root then
-				local dist = (root.Position - myRoot.Position).Magnitude
-				if dist <= 1000 and hum.Health < lowestHealth then
-					lowestHealth = hum.Health
-					bestTarget = p
+local DiagnosticDaemon = {}
+
+function DiagnosticDaemon.RunHealthCheck()
+	task.spawn(function()
+		while getgenv().TrackerActive do
+			pcall(function()
+				local char = LocalPlayer.Character
+				if char then
+					local hum = char:FindFirstChildOfClass("Humanoid")
+					if hum and hum.Health <= 0 then
+						LogTelemetry("Dead")
+					end
 				end
-			end
+			end)
+			task.wait(5)
 		end
-	end
-	return bestTarget
+	end)
 end
 
-task.spawn(function()
-	while getgenv().TrackerActive do
-		local character = LocalPlayer.Character
-		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-		local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-		
-		if not character or not humanoid or humanoid.Health <= 0 or not rootPart then
-			task.wait(0.5)
-			continue
-		end
-		
-		if rootPart.Position.Y < -400 then
-			rootPart.CFrame = CFrame.new(rootPart.Position.X, 100, rootPart.Position.Z)
-			rootPart.AssemblyLinearVelocity = Vector3.zero
-		end
-		
-		local target = getLowestHealthTarget(rootPart)
-		if not target then
-			task.wait(0.2)
-			continue
-		end
-		
-		local targetChar = target.Character
-		local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
-		local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
-		
-		if targetRoot and targetHum and targetHum.Health > 0 then
-			character = LocalPlayer.Character
-			humanoid = character and character:FindFirstChildOfClass("Humanoid")
-			rootPart = character and character:FindFirstChild("HumanoidRootPart")
-			
-			if not rootPart or not humanoid or humanoid.Health <= 0 then
-				task.wait(0.2)
-				continue
-			end
-			
-			rootPart.CFrame = targetRoot.CFrame * CFrame.new(0, 3, 0)
-			rootPart.AssemblyLinearVelocity = Vector3.zero
-			
-			local isDead = false
-			local diedConn = targetHum.Died:Connect(function()
-				isDead = true
-			end)
-			
-			while getgenv().TrackerActive and not isDead and targetHum.Health > 0 do
-				local currentChars = LocalPlayer.Character
-				local currentHums = currentChars and currentChars:FindFirstChildOfClass("Humanoid")
-				local currentRoots = currentChars and currentChars:FindFirstChild("HumanoidRootPart")
-				
-				if not currentHums or currentHums.Health <= 0 then break end
-				
-				local tRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-				if tRoot and currentRoots then
-					currentRoots.CFrame = tRoot.CFrame * CFrame.new(0, 3, 0)
-					currentRoots.AssemblyLinearVelocity = Vector3.zero
-				end
-				RunService.Heartbeat:Wait()
-			end
-			
-			if diedConn then diedConn:Disconnect() end
-			
-			local killTime = tick()
-			local savedUpPosition = nil
-			
-			while getgenv().TrackerActive and (tick() - killTime) < 1.5 do
-				local currentChars = LocalPlayer.Character
-				local currentHums = currentChars and currentChars:FindFirstChildOfClass("Humanoid")
-				local currentRoots = currentChars and currentChars:FindFirstChild("HumanoidRootPart")
-				
-				if not currentHums or currentHums.Health <= 0 then break end
-				
-				if currentRoots then
-					if not savedUpPosition then
-						savedUpPosition = currentRoots.Position + Vector3.new(0, 900, 0)
-					end
-					currentRoots.CFrame = CFrame.new(savedUpPosition)
-					currentRoots.AssemblyLinearVelocity = Vector3.zero
-					currentRoots.AssemblyAngularVelocity = Vector3.zero
-				end
-				RunService.Heartbeat:Wait()
-			end
-		else
-			task.wait(0.2)
-		end
-	end
-end)
+DiagnosticDaemon.RunHealthCheck()
