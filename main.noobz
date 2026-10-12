@@ -64,7 +64,7 @@ end
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 360, 0, 310)
-MainFrame.Position = UDim2.new(0.5, -180, 0.5, -155)
+MainFrame.Position = UDim2.new(0, 50, 0, 50)
 MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -106,6 +106,7 @@ HideButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 HideButton.TextSize = 20
 HideButton.Font = Enum.Font.SourceSansBold
 HideButton.Parent = TopBar
+HideButton.ZIndex = 5
 
 local HideStroke = Instance.new("UIStroke")
 HideStroke.Color3 = Color3.fromRGB(150, 100, 255)
@@ -131,6 +132,7 @@ FarmButton.Text = "Farm / Teleport: ON"
 FarmButton.TextSize = 16
 FarmButton.Font = Enum.Font.SourceSansBold
 FarmButton.Parent = ContentContainer
+FarmButton.ZIndex = 2
 
 local FarmStroke = Instance.new("UIStroke")
 FarmStroke.Color3 = Color3.fromRGB(130, 80, 255)
@@ -152,6 +154,8 @@ UsernameBox.Text = ""
 UsernameBox.TextSize = 16
 UsernameBox.Font = Enum.Font.SourceSans
 UsernameBox.Parent = ContentContainer
+UsernameBox.ZIndex = 2
+UsernameBox.ClearTextOnFocus = false
 
 local BoxStroke = Instance.new("UIStroke")
 BoxStroke.Color3 = Color3.fromRGB(75, 60, 120)
@@ -171,6 +175,7 @@ WhitelistButton.Text = "Whitelist Player"
 WhitelistButton.TextSize = 16
 WhitelistButton.Font = Enum.Font.SourceSansBold
 WhitelistButton.Parent = ContentContainer
+WhitelistButton.ZIndex = 2
 
 local WhitelistStroke = Instance.new("UIStroke")
 WhitelistStroke.Color3 = Color3.fromRGB(130, 80, 255)
