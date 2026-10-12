@@ -1,0 +1,654 @@
+--[[
+    ========================================================
+    TRACKER CONTROLLER v2 - BEGINNER FRIENDLY SCRIPT
+    ========================================================
+    How to use:
+    1. Paste this script into your Roblox executor.
+    2. A clean purple/dark menu will pop up on your screen.
+    3. Use the Server Players list on the right to click 
+       "Target" (focus only on killing that player) or 
+       "Ignore" (whitelist them so you don't attack them).
+    4. Click the "-" button at the top right to hide/minimize the menu.
+--]]
+
+if getgenv().TrackerCoreExpanded then
+	getgenv().TrackerCoreExpanded = false
+	task.wait(0.1)
+end
+
+getgenv().TrackerCoreExpanded = true
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Settings for how the tracker behaves
+local Config = {
+	MaxDistance = 1000,         -- How far away to look for players
+	SuspensionHeight = 100,     -- Height to float after killing a target
+	SuspensionDuration = 0.5,   -- How long to float
+	VoidThreshold = -400,       -- Safety check if you fall off the map
+	SafeSpawnHeight = 100,
+	TickInterval = 0.2
+}
+
+local State = {
+	ActiveTarget = nil,
+	LastPosition = Vector3.zero,
+	IsSuspended = false,
+	SessionStartTime = tick(),
+	FarmActive = true,          -- Main toggle for turning the tracker ON/OFF
+	LockedTarget = nil          -- Specific player chosen to exclusively attack
+}
+
+local Whitelist = {}            -- List of players to ignore
+
+local math_sqrt = math.sqrt
+local math_huge = math.huge
+local tick = tick
+local Vector3_new = Vector3.new
+local CFrame_new = CFrame.new
+local ipairs = ipairs
+
+-- Create the Menu GUI safely
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "TrackerControlGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+
+local success = pcall(function()
+	if syn and syn.protect_gui then
+		syn.protect_gui(ScreenGui)
+		ScreenGui.Parent = CoreGui
+	elseif gethui then
+		ScreenGui.Parent = gethui()
+	else
+		ScreenGui.Parent = CoreGui
+	end
+end)
+
+if not success or not ScreenGui.Parent then
+	ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+-- Main Window Frame (Dark Theme with Purple Accent Gradient)
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 540, 0, 390)
+MainFrame.Position = UDim2.new(0.5, -270, 0.5, -195)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+MainFrame.BackgroundTransparency = 0.35
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Parent = ScreenGui
+
+local MainGradient = Instance.new("UIGradient")
+MainGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 30, 50)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 15, 20))
+})
+MainGradient.Rotation = 45
+MainGradient.Parent = MainFrame
+
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Color = Color3.fromRGB(120, 80, 200)
+MainStroke.Transparency = 0.3
+MainStroke.Thickness = 1.5
+MainStroke.Parent = MainFrame
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 14)
+UICorner.Parent = MainFrame
+
+-- Title Bar (Click and drag this area to move the menu around)
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 45)
+TitleBar.BackgroundTransparency = 1
+TitleBar.Parent = MainFrame
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -50, 1, 0)
+TitleLabel.Position = UDim2.new(0, 16, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "Tracker Controller (Beginner Mode)"
+TitleLabel.TextColor3 = Color3.fromRGB(240, 230, 255)
+TitleLabel.TextSize = 15
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TitleBar
+
+-- Hide / Show Minimize Button (-)
+local HideButton = Instance.new("TextButton")
+HideButton.Size = UDim2.new(0, 32, 0, 32)
+HideButton.Position = UDim2.new(1, -40, 0, 6.5)
+HideButton.BackgroundColor3 = Color3.fromRGB(45, 35, 65)
+HideButton.BackgroundTransparency = 0.2
+HideButton.Text = "-"
+HideButton.TextColor3 = Color3.fromRGB(240, 230, 255)
+HideButton.TextSize = 18
+HideButton.Font = Enum.Font.GothamBold
+HideButton.Parent = TitleBar
+
+local HideCorner = Instance.new("UICorner")
+HideCorner.CornerRadius = UDim.new(0, 8)
+HideCorner.Parent = HideButton
+
+-- Container for all buttons and lists
+local Container = Instance.new("Frame")
+Container.Size = UDim2.new(1, 0, 1, -45)
+Container.Position = UDim2.new(0, 0, 0, 45)
+Container.BackgroundTransparency = 1
+Container.Parent = MainFrame
+
+-- Left Control Panel (Farm toggle, Target Status, Whitelist list)
+local LeftPanel = Instance.new("Frame")
+LeftPanel.Size = UDim2.new(0, 230, 1, -16)
+LeftPanel.Position = UDim2.new(0, 12, 0, 8)
+LeftPanel.BackgroundTransparency = 1
+LeftPanel.Parent = Container
+
+local FarmButton = Instance.new("TextButton")
+FarmButton.Size = UDim2.new(1, 0, 0, 40)
+FarmButton.Position = UDim2.new(0, 0, 0, 0)
+FarmButton.BackgroundColor3 = Color3.fromRGB(60, 180, 90)
+FarmButton.BackgroundTransparency = 0.15
+FarmButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+FarmButton.Text = "Auto-Farm: ON"
+FarmButton.TextSize = 13
+FarmButton.Font = Enum.Font.GothamSemibold
+FarmButton.Parent = LeftPanel
+
+local FarmGradient = Instance.new("UIGradient")
+FarmGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 210, 110)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 140, 70))
+})
+FarmGradient.Rotation = 90
+FarmGradient.Parent = FarmButton
+
+local FarmCorner = Instance.new("UICorner")
+FarmCorner.CornerRadius = UDim.new(0, 8)
+FarmCorner.Parent = FarmButton
+
+local TargetStatusLabel = Instance.new("TextLabel")
+TargetStatusLabel.Size = UDim2.new(1, 0, 0, 25)
+TargetStatusLabel.Position = UDim2.new(0, 0, 0, 46)
+TargetStatusLabel.BackgroundTransparency = 1
+TargetStatusLabel.Text = "Focusing: None (Auto)"
+TargetStatusLabel.TextColor3 = Color3.fromRGB(200, 180, 230)
+TargetStatusLabel.TextSize = 11
+TargetStatusLabel.Font = Enum.Font.GothamMedium
+TargetStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+TargetStatusLabel.Parent = LeftPanel
+
+local UntargetButton = Instance.new("TextButton")
+UntargetButton.Size = UDim2.new(1, 0, 0, 36)
+UntargetButton.Position = UDim2.new(0, 0, 0, 74)
+UntargetButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+UntargetButton.BackgroundTransparency = 0.2
+UntargetButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+UntargetButton.Text = "Stop Targeting (Go Back to Auto)"
+UntargetButton.TextSize = 11
+UntargetButton.Font = Enum.Font.GothamSemibold
+UntargetButton.Parent = LeftPanel
+
+local UntargetGradient = Instance.new("UIGradient")
+UntargetGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(210, 70, 70)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(140, 30, 30))
+})
+UntargetGradient.Rotation = 90
+UntargetGradient.Parent = UntargetButton
+
+local UntargetCorner = Instance.new("UICorner")
+UntargetCorner.CornerRadius = UDim.new(0, 8)
+UntargetCorner.Parent = UntargetButton
+
+local WhitelistHeader = Instance.new("TextLabel")
+WhitelistHeader.Size = UDim2.new(1, 0, 0, 22)
+WhitelistHeader.Position = UDim2.new(0, 0, 0, 116)
+WhitelistHeader.BackgroundTransparency = 1
+WhitelistHeader.Text = "Ignored Players (Safe from you):"
+WhitelistHeader.TextColor3 = Color3.fromRGB(200, 180, 230)
+WhitelistHeader.TextSize = 11
+WhitelistHeader.Font = Enum.Font.GothamBold
+WhitelistHeader.TextXAlignment = Enum.TextXAlignment.Left
+WhitelistHeader.Parent = LeftPanel
+
+local WhitelistScroll = Instance.new("ScrollingFrame")
+WhitelistScroll.Size = UDim2.new(1, 0, 0, 180)
+WhitelistScroll.Position = UDim2.new(0, 0, 0, 140)
+WhitelistScroll.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+WhitelistScroll.BackgroundTransparency = 0.4
+WhitelistScroll.BorderSizePixel = 0
+WhitelistScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+WhitelistScroll.ScrollBarThickness = 4
+WhitelistScroll.Parent = LeftPanel
+
+local WhitelistLayout = Instance.new("UIListLayout")
+WhitelistLayout.SortOrder = Enum.SortOrder.LayoutOrder
+WhitelistLayout.Padding = UDim.new(0, 4)
+WhitelistLayout.Parent = WhitelistScroll
+
+local WhitelistCorner = Instance.new("UICorner")
+WhitelistCorner.CornerRadius = UDim.new(0, 8)
+WhitelistCorner.Parent = WhitelistScroll
+
+local WhitelistStroke = Instance.new("UIStroke")
+WhitelistStroke.Color = Color3.fromRGB(70, 50, 100)
+WhitelistStroke.Transparency = 0.5
+WhitelistStroke.Thickness = 1
+WhitelistStroke.Parent = WhitelistScroll
+
+-- Right Panel: Live Server Player List
+local RightPanel = Instance.new("Frame")
+RightPanel.Size = UDim2.new(0, 270, 1, -16)
+RightPanel.Position = UDim2.new(0, 248, 0, 8)
+RightPanel.BackgroundTransparency = 1
+RightPanel.Parent = Container
+
+local PlayerListHeader = Instance.new("TextLabel")
+PlayerListHeader.Size = UDim2.new(1, 0, 0, 25)
+PlayerListHeader.Position = UDim2.new(0, 0, 0, 0)
+PlayerListHeader.BackgroundTransparency = 1
+PlayerListHeader.Text = "Players in Server (Click buttons to choose)"
+PlayerListHeader.TextColor3 = Color3.fromRGB(240, 230, 255)
+PlayerListHeader.TextSize = 11
+PlayerListHeader.Font = Enum.Font.GothamBold
+PlayerListHeader.TextXAlignment = Enum.TextXAlignment.Left
+PlayerListHeader.Parent = RightPanel
+
+local PlayerScroll = Instance.new("ScrollingFrame")
+PlayerScroll.Size = UDim2.new(1, 0, 1, -30)
+PlayerScroll.Position = UDim2.new(0, 0, 0, 28)
+PlayerScroll.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+PlayerScroll.BackgroundTransparency = 0.4
+PlayerScroll.BorderSizePixel = 0
+PlayerScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+PlayerScroll.ScrollBarThickness = 4
+PlayerScroll.Parent = RightPanel
+
+local PlayerLayout = Instance.new("UIListLayout")
+PlayerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+PlayerLayout.Padding = UDim.new(0, 4)
+PlayerLayout.Parent = PlayerScroll
+
+local PlayerScrollCorner = Instance.new("UICorner")
+PlayerScrollCorner.CornerRadius = UDim.new(0, 8)
+PlayerScrollCorner.Parent = PlayerScroll
+
+local PlayerScrollStroke = Instance.new("UIStroke")
+PlayerScrollStroke.Color = Color3.fromRGB(70, 50, 100)
+PlayerScrollStroke.Transparency = 0.5
+PlayerScrollStroke.Thickness = 1
+PlayerScrollStroke.Parent = PlayerScroll
+
+-- Refresh Whitelist List UI
+local function RefreshWhitelistUI()
+	for _, child in ipairs(WhitelistScroll:GetChildren()) do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+	
+	local count = 0
+	for name, _ in pairs(Whitelist) do
+		count = count + 1
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(1, -6, 0, 28)
+		btn.BackgroundColor3 = Color3.fromRGB(50, 40, 75)
+		btn.BackgroundTransparency = 0.3
+		btn.TextColor3 = Color3.fromRGB(230, 220, 250)
+		btn.Text = "  " .. name .. " (Click to Unignore)"
+		btn.TextSize = 10
+		btn.Font = Enum.Font.Gotham
+		btn.TextXAlignment = Enum.TextXAlignment.Left
+		btn.Parent = WhitelistScroll
+		
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 6)
+		corner.Parent = btn
+		
+		btn.MouseButton1Click:Connect(function()
+			Whitelist[name] = nil
+			RefreshWhitelistUI()
+		end)
+	end
+	WhitelistScroll.CanvasSize = UDim2.new(0, 0, 0, count * 32)
+end
+
+-- Refresh Active Players List UI
+local function RefreshPlayerListUI()
+	for _, child in ipairs(PlayerScroll:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+	
+	local count = 0
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			count = count + 1
+			local row = Instance.new("Frame")
+			row.Size = UDim2.new(1, -6, 0, 32)
+			row.BackgroundColor3 = Color3.fromRGB(30, 25, 45)
+			row.BackgroundTransparency = 0.3
+			row.Parent = PlayerScroll
+			
+			local rowCorner = Instance.new("UICorner")
+			rowCorner.CornerRadius = UDim.new(0, 6)
+			rowCorner.Parent = row
+			
+			local nameLabel = Instance.new("TextLabel")
+			nameLabel.Size = UDim2.new(0, 110, 1, 0)
+			nameLabel.Position = UDim2.new(0, 8, 0, 0)
+			nameLabel.BackgroundTransparency = 1
+			nameLabel.Text = player.Name
+			nameLabel.TextColor3 = Color3.fromRGB(230, 220, 250)
+			nameLabel.TextSize = 11
+			nameLabel.Font = Enum.Font.GothamSemibold
+			nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+			nameLabel.Parent = row
+			
+			-- Target Button (Focus only on them)
+			local targetBtn = Instance.new("TextButton")
+			targetBtn.Size = UDim2.new(0, 62, 0, 24)
+			targetBtn.Position = UDim2.new(1, -135, 0, 4)
+			targetBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 120)
+			targetBtn.BackgroundTransparency = 0.2
+			targetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			targetBtn.Text = "Only Them"
+			targetBtn.TextSize = 10
+			targetBtn.Font = Enum.Font.GothamBold
+			targetBtn.Parent = row
+			
+			local tCorner = Instance.new("UICorner")
+			tCorner.CornerRadius = UDim.new(0, 5)
+			tCorner.Parent = targetBtn
+			
+			targetBtn.MouseButton1Click:Connect(function()
+				State.LockedTarget = player
+				TargetStatusLabel.Text = "Focusing: " .. player.Name
+			end)
+			
+			-- Whitelist Button (Ignore them)
+			local wlBtn = Instance.new("TextButton")
+			wlBtn.Size = UDim2.new(0, 60, 0, 24)
+			wlBtn.Position = UDim2.new(1, -67, 0, 4)
+			wlBtn.BackgroundColor3 = Color3.fromRGB(70, 50, 110)
+			wlBtn.BackgroundTransparency = 0.2
+			wlBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			wlBtn.Text = Whitelist[player.Name] and "Ignored" or "Ignore"
+			wlBtn.TextSize = 10
+			wlBtn.Font = Enum.Font.GothamBold
+			wlBtn.Parent = row
+			
+			local wCorner = Instance.new("UICorner")
+			wCorner.CornerRadius = UDim.new(0, 5)
+			wCorner.Parent = wlBtn
+			
+			wlBtn.MouseButton1Click:Connect(function()
+				if Whitelist[player.Name] then
+					Whitelist[player.Name] = nil
+					wlBtn.Text = "Ignore"
+				else
+					Whitelist[player.Name] = true
+					wlBtn.Text = "Ignored"
+					if State.LockedTarget == player then
+						State.LockedTarget = nil
+						TargetStatusLabel.Text = "Focusing: None (Auto)"
+					end
+				end
+				RefreshWhitelistUI()
+			end)
+		end
+	end
+	PlayerScroll.CanvasSize = UDim2.new(0, 0, 0, count * 36)
+end
+
+Players.PlayerAdded:Connect(RefreshPlayerListUI)
+Players.PlayerRemoving:Connect(RefreshPlayerListUI)
+task.spawn(function()
+	while task.wait(2) do
+		RefreshPlayerListUI()
+	end
+end)
+RefreshPlayerListUI()
+
+-- Make Menu Draggable
+local dragging, dragInput, dragStart, startPos
+TitleBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = MainFrame.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+TitleBar.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		dragInput = input
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		local delta = input.Position - dragStart
+		MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+end)
+
+-- Minimize/Hide Toggle
+local guiVisible = true
+HideButton.MouseButton1Click:Connect(function()
+	guiVisible = not guiVisible
+	Container.Visible = guiVisible
+	if guiVisible then
+		MainFrame.Size = UDim2.new(0, 540, 0, 390)
+		HideButton.Text = "-"
+	else
+		MainFrame.Size = UDim2.new(0, 540, 0, 45)
+		HideButton.Text = "+"
+	end
+end)
+
+-- Farm ON/OFF Toggle
+FarmButton.MouseButton1Click:Connect(function()
+	State.FarmActive = not State.FarmActive
+	if State.FarmActive then
+		FarmButton.Text = "Auto-Farm: ON"
+		FarmGradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 210, 110)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 140, 70))
+		})
+	else
+		FarmButton.Text = "Auto-Farm: OFF"
+		FarmGradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(220, 70, 70)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 30, 30))
+		})
+	end
+end)
+
+UntargetButton.MouseButton1Click:Connect(function()
+	State.LockedTarget = nil
+	TargetStatusLabel.Text = "Focusing: None (Auto)"
+end)
+
+-- Math, Validation, and Teleport Logic
+local MathModule = {}
+function MathModule.GetDistanceSquared(pos1, pos2)
+	local dx = pos1.X - pos2.X
+	local dy = pos1.Y - pos2.Y
+	local dz = pos1.Z - pos2.Z
+	return (dx * dx) + (dy * dy) + (dz * dz)
+end
+
+local ValidationModule = {}
+function ValidationModule.GetHumanoid(character)
+	if not character then return nil end
+	return character:FindFirstChildOfClass("Humanoid")
+end
+
+function ValidationModule.GetRootPart(character)
+	if not character then return nil end
+	return character:FindFirstChild("HumanoidRootPart")
+end
+
+function ValidationModule.IsPlayerValid(player)
+	if not player or player == LocalPlayer then return false end
+	if Whitelist[player.Name] or Whitelist[player.DisplayName] then return false end
+	local character = player.Character
+	if not character then return false end
+	local humanoid = ValidationModule.GetHumanoid(character)
+	local rootPart = ValidationModule.GetRootPart(character)
+	if not humanoid or not rootPart or humanoid.Health <= 0 then return false end
+	return true, character, humanoid, rootPart
+end
+
+local TargetModule = {}
+function TargetModule.FindOptimalTarget(myRootPos)
+	if State.LockedTarget then
+		local isValid, char, hum, root = ValidationModule.IsPlayerValid(State.LockedTarget)
+		if isValid then
+			return State.LockedTarget
+		else
+			return nil
+		end
+	end
+	
+	local bestTarget = nil
+	local lowestHealth = math_huge
+	local maxDistSq = Config.MaxDistance * Config.MaxDistance
+	
+	for _, player in ipairs(Players:GetPlayers()) do
+		local isValid, char, hum, root = ValidationModule.IsPlayerValid(player)
+		if isValid then
+			local distSq = MathModule.GetDistanceSquared(root.Position, myRootPos)
+			if distSq <= maxDistSq then
+				if hum.Health < lowestHealth then
+					lowestHealth = hum.Health
+					bestTarget = player
+				end
+			end
+		end
+	end
+	
+	return bestTarget
+end
+
+local PhysicsModule = {}
+function PhysicsModule.VerifyVoidBoundary(rootPart)
+	if not rootPart then return end
+	if rootPart.Position.Y < Config.VoidThreshold then
+		rootPart.CFrame = CFrame_new(rootPart.Position.X, Config.SafeSpawnHeight, rootPart.Position.Z)
+		PhysicsModule.StabilizeVelocity(rootPart)
+	end
+end
+
+function PhysicsModule.StabilizeVelocity(rootPart)
+	if not rootPart then return end
+	rootPart.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
+	rootPart.AssemblyAngularVelocity = Vector3_new(0, 0, 0)
+end
+
+local MovementModule = {}
+function MovementModule.ExecuteInstantTeleport(rootPart, targetRoot)
+	if not rootPart or not targetRoot then return end
+	rootPart.CFrame = targetRoot.CFrame * CFrame_new(0, 3, 0)
+	PhysicsModule.StabilizeVelocity(rootPart)
+end
+
+local SuspensionModule = {}
+function SuspensionModule.ExecuteSuspensionSequence()
+	local killTime = tick()
+	local fixedSuspPos = nil
+	
+	while getgenv().TrackerCoreExpanded and (tick() - killTime) < Config.SuspensionDuration do
+		if not State.FarmActive then break end
+		local char, hum, root = LocalPlayer.Character, LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid"), LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+		if not hum or hum.Health <= 0 then break end
+		
+		if root then
+			if not fixedSuspPos then
+				fixedSuspPos = root.Position + Vector3_new(0, Config.SuspensionHeight, 0)
+			end
+			root.CFrame = CFrame_new(fixedSuspPos)
+			PhysicsModule.StabilizeVelocity(root)
+		end
+		RunService.Heartbeat:Wait()
+	end
+end
+
+-- Main Loop
+local LoopController = {}
+function LoopController.InitializeMainLoop()
+	task.spawn(function()
+		while getgenv().TrackerCoreExpanded do
+			local char, hum, root = LocalPlayer.Character, LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid"), LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+			
+			if not char or not hum or hum.Health <= 0 or not root or not State.FarmActive then
+				task.wait(Config.TickInterval)
+				continue
+			end
+			
+			PhysicsModule.VerifyVoidBoundary(root)
+			
+			local targetPlayer = TargetModule.FindOptimalTarget(root.Position)
+			if not targetPlayer then
+				task.wait(Config.TickInterval)
+				continue
+			end
+			
+			local tValid, tChar, tHum, tRoot = ValidationModule.IsPlayerValid(targetPlayer)
+			if tValid then
+				local currentValid, curChar, curHum, curRoot = LocalPlayer.Character, LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid"), LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+				if not currentValid or not curHum or curHum.Health <= 0 or not curRoot then
+					task.wait(Config.TickInterval)
+					continue
+				end
+				
+				MovementModule.ExecuteInstantTeleport(curRoot, tRoot)
+				
+				local targetIsDead = false
+				local deathConnection = tHum.Died:Connect(function()
+					targetIsDead = true
+				end)
+				
+				while getgenv().TrackerCoreExpanded and not targetIsDead and tHum.Health > 0 do
+					if not State.FarmActive then break end
+					local loopHum, loopRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid"), LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+					if not loopHum or loopHum.Health <= 0 then break end
+					
+					local currentTargetRoot = ValidationModule.GetRootPart(targetPlayer.Character)
+					if currentTargetRoot and loopRoot then
+						loopRoot.CFrame = currentTargetRoot.CFrame * CFrame_new(0, 3, 0)
+						PhysicsModule.StabilizeVelocity(loopRoot)
+					end
+					
+					RunService.Heartbeat:Wait()
+				end
+				
+				if deathConnection then
+					deathConnection:Disconnect()
+				end
+				
+				if State.FarmActive then
+					SuspensionModule.ExecuteSuspensionSequence()
+				end
+			else
+				task.wait(Config.TickInterval)
+			end
+		end
+	end)
+end
+
+LoopController.InitializeMainLoop()
