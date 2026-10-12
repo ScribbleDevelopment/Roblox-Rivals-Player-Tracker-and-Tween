@@ -10,7 +10,6 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -42,7 +41,7 @@ local ipairs = ipairs
 
 local SuccessGui, ScreenGui = pcall(function()
 	local gui = Instance.new("ScreenGui")
-	gui.Name = "ScribsterTrackerUI"
+	gui.Name = "TrackerControlGui"
 	gui.ResetOnSpawn = false
 	if syn and syn.protect_gui then
 		syn.protect_gui(gui)
@@ -57,137 +56,117 @@ end)
 
 if not SuccessGui or not ScreenGui then
 	ScreenGui = Instance.new("ScreenGui")
-	ScreenGui.Name = "ScribsterTrackerUI"
+	ScreenGui.Name = "TrackerControlGui"
 	ScreenGui.ResetOnSpawn = false
 	ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
+-- Clean Light-Mode GUI Design
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 360, 0, 310)
-MainFrame.Position = UDim2.new(0, 50, 0, 50)
-MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+MainFrame.Size = UDim2.new(0, 340, 0, 260)
+MainFrame.Position = UDim2.new(0, 40, 0, 60)
+MainFrame.BackgroundColor3 = Color3.fromRGB(245, 245, 250)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
-MainFrame.Draggable = false
 MainFrame.Parent = ScreenGui
 
 local MainStroke = Instance.new("UIStroke")
-MainStroke.Color3 = Color3.fromRGB(130, 80, 255)
-MainStroke.Thickness = 2.5
+MainStroke.Color = Color3.fromRGB(210, 210, 220)
+MainStroke.Thickness = 1
 MainStroke.Parent = MainFrame
 
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 16)
-MainCorner.Parent = MainFrame
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 12)
+UICorner.Parent = MainFrame
 
-local TopBar = Instance.new("Frame")
-TopBar.Size = UDim2.new(1, 0, 0, 55)
-TopBar.BackgroundTransparency = 1
-TopBar.Active = true
-TopBar.Parent = MainFrame
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 45)
+TitleBar.BackgroundTransparency = 1
+TitleBar.Parent = MainFrame
 
 local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(1, -60, 1, 0)
-TitleLabel.Position = UDim2.new(0, 20, 0, 0)
+TitleLabel.Size = UDim2.new(1, -50, 1, 0)
+TitleLabel.Position = UDim2.new(0, 16, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "SCRIBSTER TRACKER"
-TitleLabel.TextColor3 = Color3.fromRGB(240, 235, 255)
-TitleLabel.TextSize = 17
-TitleLabel.Font = Enum.Font.SourceSansBold
+TitleLabel.Text = "Tracker Controller"
+TitleLabel.TextColor3 = Color3.fromRGB(40, 40, 50)
+TitleLabel.TextSize = 15
+TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-TitleLabel.Parent = TopBar
+TitleLabel.Parent = TitleBar
 
 local HideButton = Instance.new("TextButton")
-HideButton.Size = UDim2.new(0, 36, 0, 36)
-HideButton.Position = UDim2.new(1, -46, 0, 10)
-HideButton.BackgroundColor3 = Color3.fromRGB(45, 35, 70)
+HideButton.Size = UDim2.new(0, 32, 0, 32)
+HideButton.Position = UDim2.new(1, -40, 0, 6.5)
+HideButton.BackgroundColor3 = Color3.fromRGB(230, 230, 240)
 HideButton.Text = "-"
-HideButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-HideButton.TextSize = 20
-HideButton.Font = Enum.Font.SourceSansBold
-HideButton.Parent = TopBar
-HideButton.ZIndex = 5
-
-local HideStroke = Instance.new("UIStroke")
-HideStroke.Color3 = Color3.fromRGB(150, 100, 255)
-HideStroke.Thickness = 1.5
-HideStroke.Parent = HideButton
+HideButton.TextColor3 = Color3.fromRGB(50, 50, 60)
+HideButton.TextSize = 18
+HideButton.Font = Enum.Font.GothamBold
+HideButton.Parent = TitleBar
 
 local HideCorner = Instance.new("UICorner")
-HideCorner.CornerRadius = UDim.new(0, 10)
+HideCorner.CornerRadius = UDim.new(0, 8)
 HideCorner.Parent = HideButton
 
-local ContentContainer = Instance.new("Frame")
-ContentContainer.Size = UDim2.new(1, 0, 1, -55)
-ContentContainer.Position = UDim2.new(0, 0, 0, 55)
-ContentContainer.BackgroundTransparency = 1
-ContentContainer.Parent = MainFrame
+local Container = Instance.new("Frame")
+Container.Size = UDim2.new(1, 0, 1, -45)
+Container.Position = UDim2.new(0, 0, 0, 45)
+Container.BackgroundTransparency = 1
+Container.Parent = MainFrame
 
 local FarmButton = Instance.new("TextButton")
-FarmButton.Size = UDim2.new(0, 320, 0, 52)
-FarmButton.Position = UDim2.new(0, 20, 0, 10)
-FarmButton.BackgroundColor3 = Color3.fromRGB(35, 25, 60)
+FarmButton.Size = UDim2.new(1, -32, 0, 44)
+FarmButton.Position = UDim2.new(0, 16, 0, 10)
+FarmButton.BackgroundColor3 = Color3.fromRGB(46, 160, 67)
 FarmButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 FarmButton.Text = "Farm / Teleport: ON"
-FarmButton.TextSize = 16
-FarmButton.Font = Enum.Font.SourceSansBold
-FarmButton.Parent = ContentContainer
-FarmButton.ZIndex = 2
-
-local FarmStroke = Instance.new("UIStroke")
-FarmStroke.Color3 = Color3.fromRGB(130, 80, 255)
-FarmStroke.Thickness = 2
-FarmStroke.Parent = FarmButton
+FarmButton.TextSize = 14
+FarmButton.Font = Enum.Font.GothamSemibold
+FarmButton.Parent = Container
 
 local FarmCorner = Instance.new("UICorner")
-FarmCorner.CornerRadius = UDim.new(0, 12)
+FarmCorner.CornerRadius = UDim.new(0, 8)
 FarmCorner.Parent = FarmButton
 
 local UsernameBox = Instance.new("TextBox")
-UsernameBox.Size = UDim2.new(0, 320, 0, 52)
-UsernameBox.Position = UDim2.new(0, 20, 0, 78)
-UsernameBox.BackgroundColor3 = Color3.fromRGB(25, 22, 36)
-UsernameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-UsernameBox.PlaceholderText = "Enter Username"
-UsernameBox.PlaceholderColor3 = Color3.fromRGB(140, 130, 170)
+UsernameBox.Size = UDim2.new(1, -32, 0, 44)
+UsernameBox.Position = UDim2.new(0, 16, 0, 66)
+UsernameBox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+UsernameBox.TextColor3 = Color3.fromRGB(40, 40, 50)
+UsernameBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 165)
+UsernameBox.PlaceholderText = "Enter Username to Whitelist..."
 UsernameBox.Text = ""
-UsernameBox.TextSize = 16
-UsernameBox.Font = Enum.Font.SourceSans
-UsernameBox.Parent = ContentContainer
-UsernameBox.ZIndex = 2
-UsernameBox.ClearTextOnFocus = false
+UsernameBox.TextSize = 14
+UsernameBox.Font = Enum.Font.Gotham
+UsernameBox.Parent = Container
 
 local BoxStroke = Instance.new("UIStroke")
-BoxStroke.Color3 = Color3.fromRGB(75, 60, 120)
-BoxStroke.Thickness = 2
+BoxStroke.Color = Color3.fromRGB(210, 210, 220)
+BoxStroke.Thickness = 1
 BoxStroke.Parent = UsernameBox
 
 local BoxCorner = Instance.new("UICorner")
-BoxCorner.CornerRadius = UDim.new(0, 12)
+BoxCorner.CornerRadius = UDim.new(0, 8)
 BoxCorner.Parent = UsernameBox
 
 local WhitelistButton = Instance.new("TextButton")
-WhitelistButton.Size = UDim2.new(0, 320, 0, 52)
-WhitelistButton.Position = UDim2.new(0, 20, 0, 146)
-WhitelistButton.BackgroundColor3 = Color3.fromRGB(45, 35, 75)
-WhitelistButton.TextColor3 = Color3.fromRGB(235, 225, 255)
+WhitelistButton.Size = UDim2.new(1, -32, 0, 44)
+WhitelistButton.Position = UDim2.new(0, 16, 0, 122)
+WhitelistButton.BackgroundColor3 = Color3.fromRGB(220, 220, 230)
+WhitelistButton.TextColor3 = Color3.fromRGB(40, 40, 50)
 WhitelistButton.Text = "Whitelist Player"
-WhitelistButton.TextSize = 16
-WhitelistButton.Font = Enum.Font.SourceSansBold
-WhitelistButton.Parent = ContentContainer
-WhitelistButton.ZIndex = 2
-
-local WhitelistStroke = Instance.new("UIStroke")
-WhitelistStroke.Color3 = Color3.fromRGB(130, 80, 255)
-WhitelistStroke.Thickness = 2
-WhitelistStroke.Parent = WhitelistButton
+WhitelistButton.TextSize = 14
+WhitelistButton.Font = Enum.Font.GothamSemibold
+WhitelistButton.Parent = Container
 
 local WhitelistCorner = Instance.new("UICorner")
-WhitelistCorner.CornerRadius = UDim.new(0, 12)
+WhitelistCorner.CornerRadius = UDim.new(0, 8)
 WhitelistCorner.Parent = WhitelistButton
 
+-- Dragging Logic
 local dragging, dragInput, dragStart, startPos
-TopBar.InputBegan:Connect(function(input)
+TitleBar.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		dragging = true
 		dragStart = input.Position
@@ -200,7 +179,7 @@ TopBar.InputBegan:Connect(function(input)
 	end
 end)
 
-TopBar.InputChanged:Connect(function(input)
+TitleBar.InputChanged:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 		dragInput = input
 	end
@@ -216,12 +195,12 @@ end)
 local guiVisible = true
 HideButton.MouseButton1Click:Connect(function()
 	guiVisible = not guiVisible
-	ContentContainer.Visible = guiVisible
+	Container.Visible = guiVisible
 	if guiVisible then
-		TweenService:Create(MainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(0, 360, 0, 310)}):Play()
+		MainFrame.Size = UDim2.new(0, 340, 0, 260)
 		HideButton.Text = "-"
 	else
-		TweenService:Create(MainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(0, 360, 0, 55)}):Play()
+		MainFrame.Size = UDim2.new(0, 340, 0, 45)
 		HideButton.Text = "+"
 	end
 end)
@@ -230,12 +209,10 @@ FarmButton.MouseButton1Click:Connect(function()
 	State.FarmActive = not State.FarmActive
 	if State.FarmActive then
 		FarmButton.Text = "Farm / Teleport: ON"
-		TweenService:Create(FarmButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(35, 25, 60)}):Play()
-		FarmStroke.Color3 = Color3.fromRGB(130, 80, 255)
+		FarmButton.BackgroundColor3 = Color3.fromRGB(46, 160, 67)
 	else
 		FarmButton.Text = "Farm / Teleport: OFF"
-		TweenService:Create(FarmButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(70, 25, 35)}):Play()
-		FarmStroke.Color3 = Color3.fromRGB(220, 60, 60)
+		FarmButton.BackgroundColor3 = Color3.fromRGB(215, 58, 73)
 	end
 end)
 
@@ -244,11 +221,6 @@ WhitelistButton.MouseButton1Click:Connect(function()
 	if text ~= "" then
 		Whitelist[text] = true
 		UsernameBox.Text = ""
-		local originalText = WhitelistButton.Text
-		WhitelistButton.Text = "Whitelisted Successfully!"
-		task.delay(1.5, function()
-			WhitelistButton.Text = originalText
-		end)
 	end
 end)
 
@@ -302,6 +274,13 @@ function ValidationModule.GetLocalCharacterState()
 	local hum = ValidationModule.GetHumanoid(char)
 	local root = ValidationModule.GetRootPart(char)
 	return char, hum, root
+end
+
+function ValidationModule.EnsureSafeLocalState()
+	local char, hum, root = ValidationModule.GetLocalCharacterState()
+	if not char or not hum or not root then return false end
+	if hum.Health <= 0 then return false end
+	return true, char, hum, root
 end
 
 local TargetModule = {}
@@ -402,8 +381,8 @@ function LoopController.InitializeMainLoop()
 			
 			local tValid, tChar, tHum, tRoot = ValidationModule.IsPlayerValid(targetPlayer)
 			if tValid then
-				local currentValid, curChar, curHum, curRoot = ValidationModule.GetLocalCharacterState()
-				if not currentValid or curHum.Health <= 0 then
+				local currentValid, curChar, curHum, curRoot = ValidationModule.EnsureSafeLocalState()
+				if not currentValid then
 					task.wait(Config.TickInterval)
 					continue
 				end
