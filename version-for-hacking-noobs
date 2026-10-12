@@ -1,14 +1,9 @@
 --[[
     ========================================================
-    TRACKER CONTROLLER v2 - BEGINNER FRIENDLY SCRIPT
+    TRACKER CONTROLLER v2 - FIXED & OPTIMIZED
     ========================================================
-    How to use:
-    1. Paste this script into your Roblox executor.
-    2. A clean purple/dark menu will pop up on your screen.
-    3. Use the Server Players list on the right to click 
-       "Target" (focus only on killing that player) or 
-       "Ignore" (whitelist them so you don't attack them).
-    4. Click the "-" button at the top right to hide/minimize the menu.
+    Fixes: Restored continuous tracking, improved target locking, 
+    and ensured reliable auto-farming execution.
 --]]
 
 if getgenv().TrackerCoreExpanded then
@@ -26,26 +21,21 @@ local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Settings for how the tracker behaves
 local Config = {
-	MaxDistance = 1000,         -- How far away to look for players
-	SuspensionHeight = 100,     -- Height to float after killing a target
-	SuspensionDuration = 0.5,   -- How long to float
-	VoidThreshold = -400,       -- Safety check if you fall off the map
+	MaxDistance = 1000,
+	SuspensionHeight = 100,
+	SuspensionDuration = 0.5,
+	VoidThreshold = -400,
 	SafeSpawnHeight = 100,
-	TickInterval = 0.2
+	TickInterval = 0.1
 }
 
 local State = {
-	ActiveTarget = nil,
-	LastPosition = Vector3.zero,
-	IsSuspended = false,
-	SessionStartTime = tick(),
-	FarmActive = true,          -- Main toggle for turning the tracker ON/OFF
-	LockedTarget = nil          -- Specific player chosen to exclusively attack
+	FarmActive = true,
+	LockedTarget = nil
 }
 
-local Whitelist = {}            -- List of players to ignore
+local Whitelist = {}
 
 local math_sqrt = math.sqrt
 local math_huge = math.huge
@@ -75,7 +65,7 @@ if not success or not ScreenGui.Parent then
 	ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- Main Window Frame (Dark Theme with Purple Accent Gradient)
+-- Main Window Frame
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 540, 0, 390)
 MainFrame.Position = UDim2.new(0.5, -270, 0.5, -195)
@@ -103,7 +93,7 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 14)
 UICorner.Parent = MainFrame
 
--- Title Bar (Click and drag this area to move the menu around)
+-- Title Bar
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 45)
 TitleBar.BackgroundTransparency = 1
@@ -136,14 +126,14 @@ local HideCorner = Instance.new("UICorner")
 HideCorner.CornerRadius = UDim.new(0, 8)
 HideCorner.Parent = HideButton
 
--- Container for all buttons and lists
+-- Container
 local Container = Instance.new("Frame")
 Container.Size = UDim2.new(1, 0, 1, -45)
 Container.Position = UDim2.new(0, 0, 0, 45)
 Container.BackgroundTransparency = 1
 Container.Parent = MainFrame
 
--- Left Control Panel (Farm toggle, Target Status, Whitelist list)
+-- Left Control Panel
 local LeftPanel = Instance.new("Frame")
 LeftPanel.Size = UDim2.new(0, 230, 1, -16)
 LeftPanel.Position = UDim2.new(0, 12, 0, 8)
@@ -353,7 +343,6 @@ local function RefreshPlayerListUI()
 			nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 			nameLabel.Parent = row
 			
-			-- Target Button (Focus only on them)
 			local targetBtn = Instance.new("TextButton")
 			targetBtn.Size = UDim2.new(0, 62, 0, 24)
 			targetBtn.Position = UDim2.new(1, -135, 0, 4)
@@ -374,7 +363,6 @@ local function RefreshPlayerListUI()
 				TargetStatusLabel.Text = "Focusing: " .. player.Name
 			end)
 			
-			-- Whitelist Button (Ignore them)
 			local wlBtn = Instance.new("TextButton")
 			wlBtn.Size = UDim2.new(0, 60, 0, 24)
 			wlBtn.Position = UDim2.new(1, -67, 0, 4)
@@ -418,7 +406,7 @@ task.spawn(function()
 end)
 RefreshPlayerListUI()
 
--- Make Menu Draggable
+-- Draggable Logic
 local dragging, dragInput, dragStart, startPos
 TitleBar.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -446,7 +434,6 @@ UserInputService.InputChanged:Connect(function(input)
 	end
 end)
 
--- Minimize/Hide Toggle
 local guiVisible = true
 HideButton.MouseButton1Click:Connect(function()
 	guiVisible = not guiVisible
@@ -460,7 +447,6 @@ HideButton.MouseButton1Click:Connect(function()
 	end
 end)
 
--- Farm ON/OFF Toggle
 FarmButton.MouseButton1Click:Connect(function()
 	State.FarmActive = not State.FarmActive
 	if State.FarmActive then
@@ -483,172 +469,107 @@ UntargetButton.MouseButton1Click:Connect(function()
 	TargetStatusLabel.Text = "Focusing: None (Auto)"
 end)
 
--- Math, Validation, and Teleport Logic
-local MathModule = {}
-function MathModule.GetDistanceSquared(pos1, pos2)
-	local dx = pos1.X - pos2.X
-	local dy = pos1.Y - pos2.Y
-	local dz = pos1.Z - pos2.Z
-	return (dx * dx) + (dy * dy) + (dz * dz)
+-- Validation Helpers
+local function GetCharacterState()
+	local char = LocalPlayer.Character
+	if not char then return nil, nil, nil end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	local root = char:FindFirstChild("HumanoidRootPart")
+	return char, hum, root
 end
 
-local ValidationModule = {}
-function ValidationModule.GetHumanoid(character)
-	if not character then return nil end
-	return character:FindFirstChildOfClass("Humanoid")
-end
-
-function ValidationModule.GetRootPart(character)
-	if not character then return nil end
-	return character:FindFirstChild("HumanoidRootPart")
-end
-
-function ValidationModule.IsPlayerValid(player)
+local function IsPlayerValid(player)
 	if not player or player == LocalPlayer then return false end
 	if Whitelist[player.Name] or Whitelist[player.DisplayName] then return false end
-	local character = player.Character
-	if not character then return false end
-	local humanoid = ValidationModule.GetHumanoid(character)
-	local rootPart = ValidationModule.GetRootPart(character)
-	if not humanoid or not rootPart or humanoid.Health <= 0 then return false end
-	return true, character, humanoid, rootPart
+	local char = player.Character
+	if not char then return false end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not hum or not root or hum.Health <= 0 then return false end
+	return true, char, hum, root
 end
 
-local TargetModule = {}
-function TargetModule.FindOptimalTarget(myRootPos)
-	if State.LockedTarget then
-		local isValid, char, hum, root = ValidationModule.IsPlayerValid(State.LockedTarget)
-		if isValid then
-			return State.LockedTarget
-		else
-			return nil
+-- Teleport & Loop Controller
+task.spawn(function()
+	while getgenv().TrackerCoreExpanded do
+		if not State.FarmActive then
+			task.wait(Config.TickInterval)
+			continue
 		end
-	end
-	
-	local bestTarget = nil
-	local lowestHealth = math_huge
-	local maxDistSq = Config.MaxDistance * Config.MaxDistance
-	
-	for _, player in ipairs(Players:GetPlayers()) do
-		local isValid, char, hum, root = ValidationModule.IsPlayerValid(player)
-		if isValid then
-			local distSq = MathModule.GetDistanceSquared(root.Position, myRootPos)
-			if distSq <= maxDistSq then
-				if hum.Health < lowestHealth then
-					lowestHealth = hum.Health
-					bestTarget = player
-				end
-			end
-		end
-	end
-	
-	return bestTarget
-end
-
-local PhysicsModule = {}
-function PhysicsModule.VerifyVoidBoundary(rootPart)
-	if not rootPart then return end
-	if rootPart.Position.Y < Config.VoidThreshold then
-		rootPart.CFrame = CFrame_new(rootPart.Position.X, Config.SafeSpawnHeight, rootPart.Position.Z)
-		PhysicsModule.StabilizeVelocity(rootPart)
-	end
-end
-
-function PhysicsModule.StabilizeVelocity(rootPart)
-	if not rootPart then return end
-	rootPart.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
-	rootPart.AssemblyAngularVelocity = Vector3_new(0, 0, 0)
-end
-
-local MovementModule = {}
-function MovementModule.ExecuteInstantTeleport(rootPart, targetRoot)
-	if not rootPart or not targetRoot then return end
-	rootPart.CFrame = targetRoot.CFrame * CFrame_new(0, 3, 0)
-	PhysicsModule.StabilizeVelocity(rootPart)
-end
-
-local SuspensionModule = {}
-function SuspensionModule.ExecuteSuspensionSequence()
-	local killTime = tick()
-	local fixedSuspPos = nil
-	
-	while getgenv().TrackerCoreExpanded and (tick() - killTime) < Config.SuspensionDuration do
-		if not State.FarmActive then break end
-		local char, hum, root = LocalPlayer.Character, LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid"), LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-		if not hum or hum.Health <= 0 then break end
 		
-		if root then
-			if not fixedSuspPos then
-				fixedSuspPos = root.Position + Vector3_new(0, Config.SuspensionHeight, 0)
-			end
-			root.CFrame = CFrame_new(fixedSuspPos)
-			PhysicsModule.StabilizeVelocity(root)
+		local char, hum, root = GetCharacterState()
+		if not char or not hum or hum.Health <= 0 or not root then
+			task.wait(Config.TickInterval)
+			continue
 		end
-		RunService.Heartbeat:Wait()
-	end
-end
-
--- Main Loop
-local LoopController = {}
-function LoopController.InitializeMainLoop()
-	task.spawn(function()
-		while getgenv().TrackerCoreExpanded do
-			local char, hum, root = LocalPlayer.Character, LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid"), LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-			
-			if not char or not hum or hum.Health <= 0 or not root or not State.FarmActive then
-				task.wait(Config.TickInterval)
-				continue
-			end
-			
-			PhysicsModule.VerifyVoidBoundary(root)
-			
-			local targetPlayer = TargetModule.FindOptimalTarget(root.Position)
-			if not targetPlayer then
-				task.wait(Config.TickInterval)
-				continue
-			end
-			
-			local tValid, tChar, tHum, tRoot = ValidationModule.IsPlayerValid(targetPlayer)
-			if tValid then
-				local currentValid, curChar, curHum, curRoot = LocalPlayer.Character, LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid"), LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-				if not currentValid or not curHum or curHum.Health <= 0 or not curRoot then
-					task.wait(Config.TickInterval)
-					continue
-				end
-				
-				MovementModule.ExecuteInstantTeleport(curRoot, tRoot)
-				
-				local targetIsDead = false
-				local deathConnection = tHum.Died:Connect(function()
-					targetIsDead = true
-				end)
-				
-				while getgenv().TrackerCoreExpanded and not targetIsDead and tHum.Health > 0 do
-					if not State.FarmActive then break end
-					local loopHum, loopRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid"), LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-					if not loopHum or loopHum.Health <= 0 then break end
-					
-					local currentTargetRoot = ValidationModule.GetRootPart(targetPlayer.Character)
-					if currentTargetRoot and loopRoot then
-						loopRoot.CFrame = currentTargetRoot.CFrame * CFrame_new(0, 3, 0)
-						PhysicsModule.StabilizeVelocity(loopRoot)
+		
+		-- Check Void Safety
+		if root.Position.Y < Config.VoidThreshold then
+			root.CFrame = CFrame_new(root.Position.X, Config.SafeSpawnHeight, root.Position.Z)
+			root.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
+		end
+		
+		-- Find Target
+		local targetPlayer = nil
+		if State.LockedTarget then
+			local valid = IsPlayerValid(State.LockedTarget)
+			if valid then targetPlayer = State.LockedTarget end
+		else
+			local lowestHealth = math_huge
+			local maxDistSq = Config.MaxDistance * Config.MaxDistance
+			for _, player in ipairs(Players:GetPlayers()) do
+				local valid, _, pHum, pRoot = IsPlayerValid(player)
+				if valid then
+					local dx = pRoot.Position.X - root.Position.X
+					local dy = pRoot.Position.Y - root.Position.Y
+					local dz = pRoot.Position.Z - root.Position.Z
+					local distSq = (dx * dx) + (dy * dy) + (dz * dz)
+					if distSq <= maxDistSq and pHum.Health < lowestHealth then
+						lowestHealth = pHum.Health
+						targetPlayer = player
 					end
+				end
+			end
+		end
+		
+		if targetPlayer then
+			local tValid, tChar, tHum, tRoot = IsPlayerValid(targetPlayer)
+			if tValid then
+				-- Teleport to target
+				root.CFrame = tRoot.CFrame * CFrame_new(0, 3, 0)
+				root.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
+				
+				-- Follow target until dead
+				while getgenv().TrackerCoreExpanded and State.FarmActive and tHum.Health > 0 do
+					local curChar, curHum, curRoot = GetCharacterState()
+					if not curHum or curHum.Health <= 0 or not curRoot then break end
 					
+					local targetRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+					if targetRoot then
+						curRoot.CFrame = targetRoot.CFrame * CFrame_new(0, 3, 0)
+						curRoot.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
+					end
 					RunService.Heartbeat:Wait()
 				end
 				
-				if deathConnection then
-					deathConnection:Disconnect()
+				-- Suspension / Float after kill
+				local killTime = tick()
+				local suspPos = nil
+				while getgenv().TrackerCoreExpanded and State.FarmActive and (tick() - killTime) < Config.SuspensionDuration do
+					local curChar, curHum, curRoot = GetCharacterState()
+					if not curHum or curHum.Health <= 0 then break end
+					if curRoot then
+						if not suspPos then
+							suspPos = curRoot.Position + Vector3_new(0, Config.SuspensionHeight, 0)
+						end
+						curRoot.CFrame = CFrame_new(suspPos)
+						curRoot.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
+					end
+					RunService.Heartbeat:Wait()
 				end
-				
-				if State.FarmActive then
-					SuspensionModule.ExecuteSuspensionSequence()
-				end
-			else
-				task.wait(Config.TickInterval)
 			end
 		end
-	end)
-end
-
-LoopController.InitializeMainLoop()
+		
+		task.wait(Config.TickInterval)
+	end
+end)
