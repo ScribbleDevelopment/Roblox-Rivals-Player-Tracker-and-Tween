@@ -27,7 +27,8 @@ local State = {
 	LastPosition = Vector3.zero,
 	IsSuspended = false,
 	SessionStartTime = tick(),
-	FarmActive = true
+	FarmActive = true,
+	LockedTarget = nil
 }
 
 local Whitelist = {}
@@ -39,34 +40,31 @@ local Vector3_new = Vector3.new
 local CFrame_new = CFrame.new
 local ipairs = ipairs
 
-local SuccessGui, ScreenGui = pcall(function()
-	local gui = Instance.new("ScreenGui")
-	gui.Name = "TrackerControlGui"
-	gui.ResetOnSpawn = false
-	if syn and syn.protect_gui then
-		syn.protect_gui(gui)
-		gui.Parent = CoreGui
-	elseif gethui then
-		gui.Parent = gethui()
-	else
-		gui.Parent = CoreGui
+-- Fixed ScreenGui parent setup to ensure visibility on mobile/executors
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "TrackerControlGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+if syn and syn.protect_gui then
+	syn.protect_gui(ScreenGui)
+	ScreenGui.Parent = CoreGui
+elseif gethui then
+	ScreenGui.Parent = gethui()
+else
+	pcall(function()
+		ScreenGui.Parent = CoreGui
+	end)
+	if not ScreenGui.Parent then
+		ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 	end
-	return gui
-end)
-
-if not SuccessGui or not ScreenGui then
-	ScreenGui = Instance.new("ScreenGui")
-	ScreenGui.Name = "TrackerControlGui"
-	ScreenGui.ResetOnSpawn = false
-	ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- Premium Dark Gradient GUI (65% Transparent, Draggable, Hideable)
+-- Expanded Dark Gradient GUI (65% Transparent, Larger with Player List & Targeting controls)
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 340, 0, 260)
-MainFrame.Position = UDim2.new(0, 40, 0, 60)
+MainFrame.Size = UDim2.new(0, 520, 0, 360)
+MainFrame.Position = UDim2.new(0.5, -260, 0.5, -180)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
-MainFrame.BackgroundTransparency = 0.35 -- 65% opaque / 35% transparent
+MainFrame.BackgroundTransparency = 0.35
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Parent = ScreenGui
@@ -98,9 +96,9 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -50, 1, 0)
 TitleLabel.Position = UDim2.new(0, 16, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Tracker Controller"
+TitleLabel.Text = "Tracker Controller v2"
 TitleLabel.TextColor3 = Color3.fromRGB(240, 230, 255)
-TitleLabel.TextSize = 15
+TitleLabel.TextSize = 16
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TitleBar
@@ -126,16 +124,23 @@ Container.Position = UDim2.new(0, 0, 0, 45)
 Container.BackgroundTransparency = 1
 Container.Parent = MainFrame
 
+-- Left Control Panel
+local LeftPanel = Instance.new("Frame")
+LeftPanel.Size = UDim2.new(0, 220, 1, -16)
+LeftPanel.Position = UDim2.new(0, 12, 0, 8)
+LeftPanel.BackgroundTransparency = 1
+LeftPanel.Parent = Container
+
 local FarmButton = Instance.new("TextButton")
-FarmButton.Size = UDim2.new(1, -32, 0, 44)
-FarmButton.Position = UDim2.new(0, 16, 0, 10)
+FarmButton.Size = UDim2.new(1, 0, 0, 40)
+FarmButton.Position = UDim2.new(0, 0, 0, 0)
 FarmButton.BackgroundColor3 = Color3.fromRGB(60, 180, 90)
 FarmButton.BackgroundTransparency = 0.15
 FarmButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-FarmButton.Text = "Farm / Teleport: ON"
-FarmButton.TextSize = 14
+FarmButton.Text = "Farm: ON"
+FarmButton.TextSize = 13
 FarmButton.Font = Enum.Font.GothamSemibold
-FarmButton.Parent = Container
+FarmButton.Parent = LeftPanel
 
 local FarmGradient = Instance.new("UIGradient")
 FarmGradient.Color = ColorSequence.new({
@@ -146,54 +151,253 @@ FarmGradient.Rotation = 90
 FarmGradient.Parent = FarmButton
 
 local FarmCorner = Instance.new("UICorner")
-FarmCorner.CornerRadius = UDim.new(0, 10)
+FarmCorner.CornerRadius = UDim.new(0, 8)
 FarmCorner.Parent = FarmButton
 
-local UsernameBox = Instance.new("TextBox")
-UsernameBox.Size = UDim2.new(1, -32, 0, 44)
-UsernameBox.Position = UDim2.new(0, 16, 0, 66)
-UsernameBox.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-UsernameBox.BackgroundTransparency = 0.3
-UsernameBox.TextColor3 = Color3.fromRGB(240, 230, 255)
-UsernameBox.PlaceholderColor3 = Color3.fromRGB(140, 130, 170)
-UsernameBox.PlaceholderText = "Enter Username to Whitelist..."
-UsernameBox.Text = ""
-UsernameBox.TextSize = 14
-UsernameBox.Font = Enum.Font.Gotham
-UsernameBox.Parent = Container
+local TargetStatusLabel = Instance.new("TextLabel")
+TargetStatusLabel.Size = UDim2.new(1, 0, 0, 25)
+TargetStatusLabel.Position = UDim2.new(0, 0, 0, 48)
+TargetStatusLabel.BackgroundTransparency = 1
+TargetStatusLabel.Text = "Locked Target: None"
+TargetStatusLabel.TextColor3 = Color3.fromRGB(200, 180, 230)
+TargetStatusLabel.TextSize = 12
+TargetStatusLabel.Font = Enum.Font.GothamMedium
+TargetStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+TargetStatusLabel.Parent = LeftPanel
 
-local BoxStroke = Instance.new("UIStroke")
-BoxStroke.Color = Color3.fromRGB(90, 70, 130)
-BoxStroke.Transparency = 0.4
-BoxStroke.Thickness = 1
-BoxStroke.Parent = UsernameBox
+local UntargetButton = Instance.new("TextButton")
+UntargetButton.Size = UDim2.new(1, 0, 0, 36)
+UntargetButton.Position = UDim2.new(0, 0, 0, 77)
+UntargetButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+UntargetButton.BackgroundTransparency = 0.2
+UntargetButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+UntargetButton.Text = "Release Locked Target"
+UntargetButton.TextSize = 12
+UntargetButton.Font = Enum.Font.GothamSemibold
+UntargetButton.Parent = LeftPanel
 
-local BoxCorner = Instance.new("UICorner")
-BoxCorner.CornerRadius = UDim.new(0, 10)
-BoxCorner.Parent = UsernameBox
-
-local WhitelistButton = Instance.new("TextButton")
-WhitelistButton.Size = UDim2.new(1, -32, 0, 44)
-WhitelistButton.Position = UDim2.new(0, 16, 0, 122)
-WhitelistButton.BackgroundColor3 = Color3.fromRGB(50, 40, 75)
-WhitelistButton.BackgroundTransparency = 0.2
-WhitelistButton.TextColor3 = Color3.fromRGB(240, 230, 255)
-WhitelistButton.Text = "Whitelist Player"
-WhitelistButton.TextSize = 14
-WhitelistButton.Font = Enum.Font.GothamSemibold
-WhitelistButton.Parent = Container
-
-local WhitelistGradient = Instance.new("UIGradient")
-WhitelistGradient.Color = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(75, 55, 110)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 30, 60))
+local UntargetGradient = Instance.new("UIGradient")
+UntargetGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(210, 70, 70)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(140, 30, 30))
 })
-WhitelistGradient.Rotation = 90
-WhitelistGradient.Parent = WhitelistButton
+UntargetGradient.Rotation = 90
+UntargetGradient.Parent = UntargetButton
+
+local UntargetCorner = Instance.new("UICorner")
+UntargetCorner.CornerRadius = UDim.new(0, 8)
+UntargetCorner.Parent = UntargetButton
+
+local WhitelistHeader = Instance.new("TextLabel")
+WhitelistHeader.Size = UDim2.new(1, 0, 0, 22)
+WhitelistHeader.Position = UDim2.new(0, 0, 0, 122)
+WhitelistHeader.BackgroundTransparency = 1
+WhitelistHeader.Text = "Whitelisted Players:"
+WhitelistHeader.TextColor3 = Color3.fromRGB(200, 180, 230)
+WhitelistHeader.TextSize = 12
+WhitelistHeader.Font = Enum.Font.GothamBold
+WhitelistHeader.TextXAlignment = Enum.TextXAlignment.Left
+WhitelistHeader.Parent = LeftPanel
+
+local WhitelistScroll = Instance.new("ScrollingFrame")
+WhitelistScroll.Size = UDim2.new(1, 0, 0, 140)
+WhitelistScroll.Position = UDim2.new(0, 0, 0, 147)
+WhitelistScroll.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+WhitelistScroll.BackgroundTransparency = 0.4
+WhitelistScroll.BorderSizePixel = 0
+WhitelistScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+WhitelistScroll.ScrollBarThickness = 4
+WhitelistScroll.Parent = LeftPanel
+
+local WhitelistLayout = Instance.new("UIListLayout")
+WhitelistLayout.SortOrder = Enum.SortOrder.LayoutOrder
+WhitelistLayout.Padding = UDim.new(0, 4)
+WhitelistLayout.Parent = WhitelistScroll
 
 local WhitelistCorner = Instance.new("UICorner")
-WhitelistCorner.CornerRadius = UDim.new(0, 10)
-WhitelistCorner.Parent = WhitelistButton
+WhitelistCorner.CornerRadius = UDim.new(0, 8)
+WhitelistCorner.Parent = WhitelistScroll
+
+local WhitelistStroke = Instance.new("UIStroke")
+WhitelistStroke.Color = Color3.fromRGB(70, 50, 100)
+WhitelistStroke.Transparency = 0.5
+WhitelistStroke.Thickness = 1
+WhitelistStroke.Parent = WhitelistScroll
+
+-- Right Player Selector Panel
+local RightPanel = Instance.new("Frame")
+RightPanel.Size = UDim2.new(0, 260, 1, -16)
+RightPanel.Position = UDim2.new(0, 238, 0, 8)
+RightPanel.BackgroundTransparency = 1
+RightPanel.Parent = Container
+
+local PlayerListHeader = Instance.new("TextLabel")
+PlayerListHeader.Size = UDim2.new(1, 0, 0, 25)
+PlayerListHeader.Position = UDim2.new(0, 0, 0, 0)
+PlayerListHeader.BackgroundTransparency = 1
+PlayerListHeader.Text = "Server Players (Click to Manage)"
+PlayerListHeader.TextColor3 = Color3.fromRGB(240, 230, 255)
+PlayerListHeader.TextSize = 12
+PlayerListHeader.Font = Enum.Font.GothamBold
+PlayerListHeader.TextXAlignment = Enum.TextXAlignment.Left
+PlayerListHeader.Parent = RightPanel
+
+local PlayerScroll = Instance.new("ScrollingFrame")
+PlayerScroll.Size = UDim2.new(1, 0, 1, -30)
+PlayerScroll.Position = UDim2.new(0, 0, 0, 28)
+PlayerScroll.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+PlayerScroll.BackgroundTransparency = 0.4
+PlayerScroll.BorderSizePixel = 0
+PlayerScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+PlayerScroll.ScrollBarThickness = 4
+PlayerScroll.Parent = RightPanel
+
+local PlayerLayout = Instance.new("UIListLayout")
+PlayerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+PlayerLayout.Padding = UDim.new(0, 4)
+PlayerLayout.Parent = PlayerScroll
+
+local PlayerScrollCorner = Instance.new("UICorner")
+PlayerScrollCorner.CornerRadius = UDim.new(0, 8)
+PlayerScrollCorner.Parent = PlayerScroll
+
+local PlayerScrollStroke = Instance.new("UIStroke")
+PlayerScrollStroke.Color = Color3.fromRGB(70, 50, 100)
+PlayerScrollStroke.Transparency = 0.5
+PlayerScrollStroke.Thickness = 1
+PlayerScrollStroke.Parent = PlayerScroll
+
+-- Update Whitelist UI List
+local function RefreshWhitelistUI()
+	for _, child in ipairs(WhitelistScroll:GetChildren()) do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+	
+	local count = 0
+	for name, _ in pairs(Whitelist) do
+		count = count + 1
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(1, -6, 0, 28)
+		btn.BackgroundColor3 = Color3.fromRGB(50, 40, 75)
+		btn.BackgroundTransparency = 0.3
+		btn.TextColor3 = Color3.fromRGB(230, 220, 250)
+		btn.Text = "  " .. name .. " (Click to Unwhitelist)"
+		btn.TextSize = 11
+		btn.Font = Enum.Font.Gotham
+		btn.TextXAlignment = Enum.TextXAlignment.Left
+		btn.Parent = WhitelistScroll
+		
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 6)
+		corner.Parent = btn
+		
+		btn.MouseButton1Click:Connect(function()
+			Whitelist[name] = nil
+			RefreshWhitelistUI()
+		end)
+	end
+	WhitelistScroll.CanvasSize = UDim2.new(0, 0, 0, count * 32)
+end
+
+-- Update Server Players UI List with interactive options
+local function RefreshPlayerListUI()
+	for _, child in ipairs(PlayerScroll:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+	
+	local count = 0
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			count = count + 1
+			local row = Instance.new("Frame")
+			row.Size = UDim2.new(1, -6, 0, 32)
+			row.BackgroundColor3 = Color3.fromRGB(30, 25, 45)
+			row.BackgroundTransparency = 0.3
+			row.Parent = PlayerScroll
+			
+			local rowCorner = Instance.new("UICorner")
+			rowCorner.CornerRadius = UDim.new(0, 6)
+			rowCorner.Parent = row
+			
+			local nameLabel = Instance.new("TextLabel")
+			nameLabel.Size = UDim2.new(0, 110, 1, 0)
+			nameLabel.Position = UDim2.new(0, 8, 0, 0)
+			nameLabel.BackgroundTransparency = 1
+			nameLabel.Text = player.Name
+			nameLabel.TextColor3 = Color3.fromRGB(230, 220, 250)
+			nameLabel.TextSize = 11
+			nameLabel.Font = Enum.Font.GothamSemibold
+			nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+			nameLabel.Parent = row
+			
+			-- Target Button
+			local targetBtn = Instance.new("TextButton")
+			targetBtn.Size = UDim2.new(0, 58, 0, 24)
+			targetBtn.Position = UDim2.new(1, -127, 0, 4)
+			targetBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 120)
+			targetBtn.BackgroundTransparency = 0.2
+			targetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			targetBtn.Text = "Target"
+			targetBtn.TextSize = 10
+			targetBtn.Font = Enum.Font.GothamBold
+			targetBtn.Parent = row
+			
+			local tCorner = Instance.new("UICorner")
+			tCorner.CornerRadius = UDim.new(0, 5)
+			tCorner.Parent = targetBtn
+			
+			targetBtn.MouseButton1Click:Connect(function()
+				State.LockedTarget = player
+				TargetStatusLabel.Text = "Locked: " .. player.Name
+			end)
+			
+			-- Whitelist Button
+			local wlBtn = Instance.new("TextButton")
+			wlBtn.Size = UDim2.new(0, 55, 0, 24)
+			wlBtn.Position = UDim2.new(1, -62, 0, 4)
+			wlBtn.BackgroundColor3 = Color3.fromRGB(70, 50, 110)
+			wlBtn.BackgroundTransparency = 0.2
+			wlBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			wlBtn.Text = Whitelist[player.Name] and "W/L'd" or "Whitelist"
+			wlBtn.TextSize = 10
+			wlBtn.Font = Enum.Font.GothamBold
+			wlBtn.Parent = row
+			
+			local wCorner = Instance.new("UICorner")
+			wCorner.CornerRadius = UDim.new(0, 5)
+			wCorner.Parent = wlBtn
+			
+			wlBtn.MouseButton1Click:Connect(function()
+				if Whitelist[player.Name] then
+					Whitelist[player.Name] = nil
+					wlBtn.Text = "Whitelist"
+				else
+					Whitelist[player.Name] = true
+					wlBtn.Text = "W/L'd"
+					if State.LockedTarget == player then
+						State.LockedTarget = nil
+						TargetStatusLabel.Text = "Locked Target: None"
+					end
+				end
+				RefreshWhitelistUI()
+			end)
+		end
+	end
+	PlayerScroll.CanvasSize = UDim2.new(0, 0, 0, count * 36)
+end
+
+Players.PlayerAdded:Connect(RefreshPlayerListUI)
+Players.PlayerRemoving:Connect(RefreshPlayerListUI)
+task.spawn(function()
+	while task.wait(2) do
+		RefreshPlayerListUI()
+	end
+end)
+RefreshPlayerListUI()
 
 -- Smooth Drag Logic
 local dragging, dragInput, dragStart, startPos
@@ -228,10 +432,10 @@ HideButton.MouseButton1Click:Connect(function()
 	guiVisible = not guiVisible
 	Container.Visible = guiVisible
 	if guiVisible then
-		MainFrame.Size = UDim2.new(0, 340, 0, 260)
+		MainFrame.Size = UDim2.new(0, 520, 0, 360)
 		HideButton.Text = "-"
 	else
-		MainFrame.Size = UDim2.new(0, 340, 0, 45)
+		MainFrame.Size = UDim2.new(0, 520, 0, 45)
 		HideButton.Text = "+"
 	end
 end)
@@ -239,13 +443,13 @@ end)
 FarmButton.MouseButton1Click:Connect(function()
 	State.FarmActive = not State.FarmActive
 	if State.FarmActive then
-		FarmButton.Text = "Farm / Teleport: ON"
+		FarmButton.Text = "Farm: ON"
 		FarmGradient.Color = ColorSequence.new({
 			ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 210, 110)),
 			ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 140, 70))
 		})
 	else
-		FarmButton.Text = "Farm / Teleport: OFF"
+		FarmButton.Text = "Farm: OFF"
 		FarmGradient.Color = ColorSequence.new({
 			ColorSequenceKeypoint.new(0, Color3.fromRGB(220, 70, 70)),
 			ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 30, 30))
@@ -253,12 +457,9 @@ FarmButton.MouseButton1Click:Connect(function()
 	end
 end)
 
-WhitelistButton.MouseButton1Click:Connect(function()
-	local text = UsernameBox.Text
-	if text ~= "" then
-		Whitelist[text] = true
-		UsernameBox.Text = ""
-	end
+UntargetButton.MouseButton1Click:Connect(function()
+	State.LockedTarget = nil
+	TargetStatusLabel.Text = "Locked Target: None"
 end)
 
 local MathModule = {}
@@ -323,6 +524,15 @@ end
 local TargetModule = {}
 
 function TargetModule.FindOptimalTarget(myRootPos)
+	if State.LockedTarget then
+		local isValid, char, hum, root = ValidationModule.IsPlayerValid(State.LockedTarget)
+		if isValid then
+			return State.LockedTarget
+		else
+			return nil
+		end
+	end
+	
 	local bestTarget = nil
 	local lowestHealth = math_huge
 	local maxDistSq = Config.MaxDistance * Config.MaxDistance
