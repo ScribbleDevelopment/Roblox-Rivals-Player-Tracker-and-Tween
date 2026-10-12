@@ -61,22 +61,32 @@ if not SuccessGui or not ScreenGui then
 	ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- Clean Light-Mode GUI Design
+-- Premium Dark Gradient GUI (65% Transparent, Draggable, Hideable)
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 340, 0, 260)
 MainFrame.Position = UDim2.new(0, 40, 0, 60)
-MainFrame.BackgroundColor3 = Color3.fromRGB(245, 245, 250)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+MainFrame.BackgroundTransparency = 0.35 -- 65% opaque / 35% transparent
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Parent = ScreenGui
 
+local MainGradient = Instance.new("UIGradient")
+MainGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 30, 50)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 15, 20))
+})
+MainGradient.Rotation = 45
+MainGradient.Parent = MainFrame
+
 local MainStroke = Instance.new("UIStroke")
-MainStroke.Color = Color3.fromRGB(210, 210, 220)
-MainStroke.Thickness = 1
+MainStroke.Color = Color3.fromRGB(120, 80, 200)
+MainStroke.Transparency = 0.3
+MainStroke.Thickness = 1.5
 MainStroke.Parent = MainFrame
 
 local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 12)
+UICorner.CornerRadius = UDim.new(0, 14)
 UICorner.Parent = MainFrame
 
 local TitleBar = Instance.new("Frame")
@@ -89,7 +99,7 @@ TitleLabel.Size = UDim2.new(1, -50, 1, 0)
 TitleLabel.Position = UDim2.new(0, 16, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Text = "Tracker Controller"
-TitleLabel.TextColor3 = Color3.fromRGB(40, 40, 50)
+TitleLabel.TextColor3 = Color3.fromRGB(240, 230, 255)
 TitleLabel.TextSize = 15
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -98,9 +108,10 @@ TitleLabel.Parent = TitleBar
 local HideButton = Instance.new("TextButton")
 HideButton.Size = UDim2.new(0, 32, 0, 32)
 HideButton.Position = UDim2.new(1, -40, 0, 6.5)
-HideButton.BackgroundColor3 = Color3.fromRGB(230, 230, 240)
+HideButton.BackgroundColor3 = Color3.fromRGB(45, 35, 65)
+HideButton.BackgroundTransparency = 0.2
 HideButton.Text = "-"
-HideButton.TextColor3 = Color3.fromRGB(50, 50, 60)
+HideButton.TextColor3 = Color3.fromRGB(240, 230, 255)
 HideButton.TextSize = 18
 HideButton.Font = Enum.Font.GothamBold
 HideButton.Parent = TitleBar
@@ -118,23 +129,33 @@ Container.Parent = MainFrame
 local FarmButton = Instance.new("TextButton")
 FarmButton.Size = UDim2.new(1, -32, 0, 44)
 FarmButton.Position = UDim2.new(0, 16, 0, 10)
-FarmButton.BackgroundColor3 = Color3.fromRGB(46, 160, 67)
+FarmButton.BackgroundColor3 = Color3.fromRGB(60, 180, 90)
+FarmButton.BackgroundTransparency = 0.15
 FarmButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 FarmButton.Text = "Farm / Teleport: ON"
 FarmButton.TextSize = 14
 FarmButton.Font = Enum.Font.GothamSemibold
 FarmButton.Parent = Container
 
+local FarmGradient = Instance.new("UIGradient")
+FarmGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 210, 110)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 140, 70))
+})
+FarmGradient.Rotation = 90
+FarmGradient.Parent = FarmButton
+
 local FarmCorner = Instance.new("UICorner")
-FarmCorner.CornerRadius = UDim.new(0, 8)
+FarmCorner.CornerRadius = UDim.new(0, 10)
 FarmCorner.Parent = FarmButton
 
 local UsernameBox = Instance.new("TextBox")
 UsernameBox.Size = UDim2.new(1, -32, 0, 44)
 UsernameBox.Position = UDim2.new(0, 16, 0, 66)
-UsernameBox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-UsernameBox.TextColor3 = Color3.fromRGB(40, 40, 50)
-UsernameBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 165)
+UsernameBox.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+UsernameBox.BackgroundTransparency = 0.3
+UsernameBox.TextColor3 = Color3.fromRGB(240, 230, 255)
+UsernameBox.PlaceholderColor3 = Color3.fromRGB(140, 130, 170)
 UsernameBox.PlaceholderText = "Enter Username to Whitelist..."
 UsernameBox.Text = ""
 UsernameBox.TextSize = 14
@@ -142,29 +163,39 @@ UsernameBox.Font = Enum.Font.Gotham
 UsernameBox.Parent = Container
 
 local BoxStroke = Instance.new("UIStroke")
-BoxStroke.Color = Color3.fromRGB(210, 210, 220)
+BoxStroke.Color = Color3.fromRGB(90, 70, 130)
+BoxStroke.Transparency = 0.4
 BoxStroke.Thickness = 1
 BoxStroke.Parent = UsernameBox
 
 local BoxCorner = Instance.new("UICorner")
-BoxCorner.CornerRadius = UDim.new(0, 8)
+BoxCorner.CornerRadius = UDim.new(0, 10)
 BoxCorner.Parent = UsernameBox
 
 local WhitelistButton = Instance.new("TextButton")
 WhitelistButton.Size = UDim2.new(1, -32, 0, 44)
 WhitelistButton.Position = UDim2.new(0, 16, 0, 122)
-WhitelistButton.BackgroundColor3 = Color3.fromRGB(220, 220, 230)
-WhitelistButton.TextColor3 = Color3.fromRGB(40, 40, 50)
+WhitelistButton.BackgroundColor3 = Color3.fromRGB(50, 40, 75)
+WhitelistButton.BackgroundTransparency = 0.2
+WhitelistButton.TextColor3 = Color3.fromRGB(240, 230, 255)
 WhitelistButton.Text = "Whitelist Player"
 WhitelistButton.TextSize = 14
 WhitelistButton.Font = Enum.Font.GothamSemibold
 WhitelistButton.Parent = Container
 
+local WhitelistGradient = Instance.new("UIGradient")
+WhitelistGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(75, 55, 110)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 30, 60))
+})
+WhitelistGradient.Rotation = 90
+WhitelistGradient.Parent = WhitelistButton
+
 local WhitelistCorner = Instance.new("UICorner")
-WhitelistCorner.CornerRadius = UDim.new(0, 8)
+WhitelistCorner.CornerRadius = UDim.new(0, 10)
 WhitelistCorner.Parent = WhitelistButton
 
--- Dragging Logic
+-- Smooth Drag Logic
 local dragging, dragInput, dragStart, startPos
 TitleBar.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -209,10 +240,16 @@ FarmButton.MouseButton1Click:Connect(function()
 	State.FarmActive = not State.FarmActive
 	if State.FarmActive then
 		FarmButton.Text = "Farm / Teleport: ON"
-		FarmButton.BackgroundColor3 = Color3.fromRGB(46, 160, 67)
+		FarmGradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 210, 110)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 140, 70))
+		})
 	else
 		FarmButton.Text = "Farm / Teleport: OFF"
-		FarmButton.BackgroundColor3 = Color3.fromRGB(215, 58, 73)
+		FarmGradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(220, 70, 70)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 30, 30))
+		})
 	end
 end)
 
